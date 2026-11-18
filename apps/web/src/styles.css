@@ -1,0 +1,165 @@
+:root {
+  --bg: #0b0f0c;
+  --fg: #c8facc;
+  --accent: #39ff88;
+  --muted: #5f7f66;
+  --bar: #121a14;
+  --font: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* Sichtbare Höhe über der Tastatur, per visualViewport gesetzt. Fallback: dvh. */
+  --app-h: 100dvh;
+  --app-top: 0px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+}
+
+body {
+  position: fixed;
+  inset: 0;
+}
+
+.app {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--app-top);
+  height: var(--app-h);
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+.term {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 8px 0;
+  overflow: hidden;
+}
+
+.term .xterm {
+  height: 100%;
+}
+
+.term .xterm-viewport {
+  background: var(--bg) !important;
+  overscroll-behavior: contain;
+}
+
+.prompt {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  padding: 4px 8px 6px;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.prompt[hidden] {
+  display: none;
+}
+
+.prompt-label {
+  white-space: nowrap;
+}
+
+.prompt-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Mindestens 16px, sonst zoomt iOS beim Fokus. */
+  font: 16px/1.4 var(--font);
+  color: var(--fg);
+  caret-color: var(--accent);
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 2px 0;
+}
+
+.quickkeys {
+  flex: 0 0 auto;
+  display: none;
+  gap: 4px;
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+  background: var(--bar);
+  border-top: 1px solid #1e2b21;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.quickkeys button {
+  flex: 1 0 auto;
+  min-width: 40px;
+  min-height: 36px;
+  padding: 0 8px;
+  font: 14px var(--font);
+  color: var(--fg);
+  background: #1a251d;
+  border: 1px solid #2a3b2e;
+  border-radius: 6px;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.quickkeys button:active {
+  background: #24372a;
+}
+
+/* Quick-Key-Leiste auf Touch-Geräten und schmalen Viewports. */
+@media (pointer: coarse), (max-width: 600px) {
+  .quickkeys {
+    display: flex;
+  }
+}
+
+.matrix {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  z-index: 10;
+  transition: opacity 300ms ease-out;
+}
+
+.matrix.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.matrix[hidden] {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 480px) {
+  .prompt-user {
+    display: none;
+  }
+}
