@@ -8,6 +8,7 @@ import { createLiveRegion } from './terminal/live.ts';
 import { createNativeInput } from './terminal/native-input.ts';
 import { bindQuickKeys } from './terminal/quickkeys.ts';
 import { createTerminal } from './terminal/term.ts';
+import { bindTouchScroll } from './terminal/touch-scroll.ts';
 import { trackVisualViewport } from './terminal/viewport.ts';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -39,7 +40,20 @@ async function boot(): Promise<void> {
     view.fit();
     editor.redraw();
   });
-  bindQuickKeys(byId('quickkeys'), () => editor);
+  const quickkeys = byId('quickkeys');
+  bindQuickKeys(quickkeys, () => editor);
+  // Wischen über die Ausgabe scrollt den Verlauf (iOS Safari kann das mit xterm.js nicht selbst).
+  bindTouchScroll(
+    app,
+    {
+      scrollLines: (n) => view.term.scrollLines(n),
+      cellHeight: () => {
+        const screen = termEl.querySelector<HTMLElement>('.xterm-screen');
+        return screen && view.term.rows ? screen.clientHeight / view.term.rows : 0;
+      },
+    },
+    (el) => quickkeys.contains(el),
+  );
 
   // Tippen auf die Ausgabe fokussiert die Eingabe (außer beim Markieren).
   termEl.addEventListener('click', () => {

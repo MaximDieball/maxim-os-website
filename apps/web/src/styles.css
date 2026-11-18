@@ -49,6 +49,8 @@ body {
 
 .term {
   flex: 1 1 auto;
+  /* Wischen übernimmt touch-scroll.ts; der Browser soll die Seite nicht verschieben. */
+  touch-action: none;
   min-height: 0;
   padding: 8px 8px 0;
   overflow: hidden;
@@ -77,6 +79,7 @@ body {
   opacity: 0;
   overflow: hidden;
   z-index: 1;
+  touch-action: none;
 }
 
 .prompt[hidden] {
