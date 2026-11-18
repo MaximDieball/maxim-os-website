@@ -1,0 +1,8 @@
+MAXIM OS
+an ai coding project
+
+Eine persönliche Website, die ein Terminal simuliert.
+Gebaut mit TypeScript, xterm.js und Fastify, komplett in Docker.
+
+Die Commands sind simuliert: Es läuft keine echte Shell,
+und das Dateisystem ist nur lesbar.
