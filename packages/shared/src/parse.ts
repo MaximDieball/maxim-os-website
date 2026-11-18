@@ -18,6 +18,14 @@ export const LIMITS = {
 // eslint-disable-next-line no-control-regex
 export const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/;
 
+const CONTROL_CHARS_GLOBAL = new RegExp(CONTROL_CHARS.source, 'g');
+
+/** Macht Benutzereingaben für Fehlermeldungen ungefährlich (Steuerzeichen werden zu "?"). */
+export function printable(text: string, max = 40): string {
+  const safe = text.replace(CONTROL_CHARS_GLOBAL, '?');
+  return safe.length > max ? `${safe.slice(0, max - 1)}…` : safe;
+}
+
 export type TokenizeResult = { ok: true; tokens: string[] } | { ok: false; error: string };
 
 /** Zerlegt eine Eingabezeile in Tokens. Unterstützt "doppelte" und 'einfache' Anführungszeichen. */
@@ -77,14 +85,14 @@ export function parseArgs(spec: CommandSpec, args: readonly string[]): ParseResu
       operands.push(arg);
       continue;
     }
-    if (arg.startsWith('--')) return fail(`unbekannte Option: ${arg.slice(0, 40)}`);
+    if (arg.startsWith('--')) return fail(`unbekannte Option: ${printable(arg)}`);
 
     // Kurz-Flags: -l, -la, -L 2, -L2
     const letters = [...arg.slice(1)];
     for (let k = 0; k < letters.length; k++) {
       const letter = letters[k]!;
       const flag = byShort.get(letter);
-      if (!flag) return fail(`unbekannte Option: -${letter}`);
+      if (!flag) return fail(`unbekannte Option: -${printable(letter)}`);
       if (!flag.int) {
         flags[letter] = true;
         continue;
@@ -93,7 +101,7 @@ export function parseArgs(spec: CommandSpec, args: readonly string[]): ParseResu
       const raw = rest !== '' ? rest : args[++i];
       if (raw === undefined) return fail(`-${letter} braucht eine Zahl`);
       if (!/^\d{1,3}$/.test(raw))
-        return fail(`-${letter}: keine gültige Zahl: ${raw.slice(0, 20)}`);
+        return fail(`-${letter}: keine gültige Zahl: ${printable(raw, 20)}`);
       const value = Number(raw);
       if (value < flag.int.min || value > flag.int.max) {
         return fail(`-${letter}: erlaubt ist ${flag.int.min} bis ${flag.int.max}`);

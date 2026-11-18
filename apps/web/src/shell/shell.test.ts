@@ -209,6 +209,14 @@ describe('Shell', () => {
     expect(lines.join(' ')).toContain('ungültig');
   });
 
+  it('never prints control characters from server messages (#26 FINDING-1)', async () => {
+    const { out, lines } = fakeOutput();
+    const { api } = fakeApi({ cat: { kind: 'error', message: 'cat: \u001b]0;pwned\u0007: x' } });
+    await new Shell(out, api).execute('cat x');
+    expect(lines.join('')).not.toContain('\u001b');
+    expect(lines.join('')).not.toContain('\u0007');
+  });
+
   it('shows server and network errors', async () => {
     const { out, lines } = fakeOutput();
     const api: ServerApi = {
