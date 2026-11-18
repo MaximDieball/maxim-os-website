@@ -1,0 +1,33 @@
+# Production-Image: Multi-Stage-Build, läuft als Nicht-Root-User.
+
+# --- Build ---
+FROM node:26.13.1-bookworm-slim AS build
+RUN npm install -g pnpm@12.21.0 && npm cache clean --force
+WORKDIR /src
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/web/package.json apps/web/
+COPY apps/server/package.json apps/server/
+COPY e2e/package.json e2e/
+RUN pnpm install --frozen-lockfile --filter '!@maxim-os/e2e'
+COPY packages ./packages
+COPY apps ./apps
+RUN pnpm build \
+ && pnpm --filter @maxim-os/server deploy --prod --legacy /out \
+ && rm -rf /out/src /out/tsconfig*.json \
+ && cp -r apps/web/dist /out/public
+
+# --- Runtime ---
+FROM node:26.13.1-alpine AS runtime
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOST=0.0.0.0 \
+    PUBLIC_DIR=/app/public \
+    CONTENT_DIR=/content
+WORKDIR /app
+COPY --from=build --chown=root:root /out /app
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["node", "dist/index.js"]

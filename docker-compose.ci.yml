@@ -1,0 +1,18 @@
+# Nur für GitHub Actions: Docker-Layer-Cache über den GHA-Cache.
+# Wird per DC="docker compose -f docker-compose.yml -f docker-compose.ci.yml" zugeschaltet.
+services:
+  dev:
+    build:
+      cache_from: ['type=gha,scope=dev']
+      cache_to: ['type=gha,scope=dev,mode=max']
+  tools:
+    build:
+      cache_from: ['type=gha,scope=dev']
+  app:
+    build:
+      cache_from: ['type=gha,scope=app']
+      cache_to: ['type=gha,scope=app,mode=max']
+  playwright:
+    build:
+      cache_from: ['type=gha,scope=playwright']
+      cache_to: ['type=gha,scope=playwright,mode=max']

@@ -1,0 +1,8 @@
+# UI-Tests. Version muss exakt zu @playwright/test in e2e/package.json passen,
+# damit lokal und in der CI identisch gerendert wird.
+FROM mcr.microsoft.com/playwright:v1.65.1-noble
+WORKDIR /e2e
+COPY e2e/package.json ./
+RUN npm install --no-audit --no-fund && npm cache clean --force
+ENTRYPOINT ["npx", "playwright"]
+CMD ["test"]
