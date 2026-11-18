@@ -1,9 +1,13 @@
 :root {
-  --bg: #0b0f0c;
-  --fg: #c8facc;
-  --accent: #39ff88;
-  --muted: #5f7f66;
-  --bar: #121a14;
+  /* Gleiche Werte wie THEME in terminal/term.ts. */
+  --bg: #000000;
+  --fg: #e6e6e6;
+  --accent: #4ade80;
+  --muted: #7a7a7a;
+  --bar: #0d0d0d;
+  --key: #1a1a1a;
+  --key-border: #2e2e2e;
+  --key-active: #2a2a2a;
   --font: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   /* Sichtbare Höhe über der Tastatur, per visualViewport gesetzt. Fallback: dvh. */
   --app-h: 100dvh;
@@ -59,35 +63,38 @@ body {
   overscroll-behavior: contain;
 }
 
+/*
+ * Das native Input liegt unsichtbar über der aktuellen Prompt-Zeile (Position per JS).
+ * Sichtbar sind Prompt, Text und Cursor, die xterm.js selbst zeichnet (prompt-line.ts).
+ */
 .prompt {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.5ch;
-  padding: 4px 8px 6px;
-  font-size: 16px;
-  color: var(--accent);
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: var(--prompt-top, 0px);
+  height: var(--prompt-h, 18px);
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  z-index: 1;
 }
 
 .prompt[hidden] {
   display: none;
 }
 
-.prompt-label {
-  white-space: nowrap;
-}
-
 .prompt-input {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
   /* Mindestens 16px, sonst zoomt iOS beim Fokus. */
-  font: 16px/1.4 var(--font);
-  color: var(--fg);
-  caret-color: var(--accent);
+  font: 16px/1 var(--font);
+  color: transparent;
+  caret-color: transparent;
   background: transparent;
   border: 0;
   outline: none;
-  padding: 2px 0;
+  padding: 0;
 }
 
 .quickkeys {
@@ -96,7 +103,7 @@ body {
   gap: 4px;
   padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
   background: var(--bar);
-  border-top: 1px solid #1e2b21;
+  border-top: 1px solid var(--key-border);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -108,16 +115,16 @@ body {
   padding: 0 8px;
   font: 14px var(--font);
   color: var(--fg);
-  background: #1a251d;
-  border: 1px solid #2a3b2e;
-  border-radius: 6px;
+  background: var(--key);
+  border: 1px solid var(--key-border);
+  border-radius: 8px;
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
 }
 
 .quickkeys button:active {
-  background: #24372a;
+  background: var(--key-active);
 }
 
 /* Quick-Key-Leiste auf Touch-Geräten und schmalen Viewports. */
@@ -156,10 +163,4 @@ body {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-@media (max-width: 480px) {
-  .prompt-user {
-    display: none;
-  }
 }

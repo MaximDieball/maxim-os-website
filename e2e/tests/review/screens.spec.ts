@@ -17,6 +17,14 @@ test('help', async ({ page }, info) => {
   await page.screenshot(shot(info.project.name, '02-help'));
 });
 
+test('typing', async ({ page }, info) => {
+  await openTerminal(page);
+  await run(page, 'help');
+  await page.locator('#cmd').focus();
+  await page.keyboard.type('cle');
+  await page.screenshot(shot(info.project.name, '04-typing'));
+});
+
 test('unknown and many commands', async ({ page }, info) => {
   await openTerminal(page);
   for (const c of ['ls', 'sudo rm -rf /', 'help', 'nope']) await run(page, c);
@@ -25,9 +33,16 @@ test('unknown and many commands', async ({ page }, info) => {
 
 test.describe('boot animation', () => {
   test.use({ reducedMotion: 'no-preference' });
-  test('matrix', async ({ page }, info) => {
+  test('matrix reveal', async ({ page }, info) => {
     await page.goto('/');
-    await page.waitForTimeout(1200);
-    await page.screenshot(shot(info.project.name, '00-matrix'));
+    // Verdeckt, halb freigegeben, fast frei (Abstände zwischen den Aufnahmen).
+    for (const [wait, name] of [
+      [300, '00-matrix-a'],
+      [1000, '00-matrix-b'],
+      [900, '00-matrix-c'],
+    ] as const) {
+      await page.waitForTimeout(wait);
+      await page.screenshot(shot(info.project.name, name));
+    }
   });
 });

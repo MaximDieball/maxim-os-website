@@ -26,13 +26,10 @@ export async function run(page: Page, command: string): Promise<void> {
   await page.keyboard.press('Enter');
 }
 
-/** Letzte nicht-leere Zeile im sichtbaren Terminalbereich. */
-export async function lastVisibleLine(page: Page): Promise<string> {
+/** Nicht-leere Zeilen im sichtbaren Terminalbereich (ohne Leerzeilen). */
+export async function visibleLines(page: Page): Promise<string[]> {
   const rows = await page.locator('.xterm-rows > div').allInnerTexts();
-  return (
-    rows
-      .map((r) => r.replace(/\u00a0/g, ' ').trimEnd())
-      .filter(Boolean)
-      .at(-1) ?? ''
-  );
+  return rows.map((r) => r.replace(/\u00a0/g, ' ').trimEnd()).filter(Boolean);
 }
+
+export const PROMPT_TEXT = 'guest@maxim-os:/$';

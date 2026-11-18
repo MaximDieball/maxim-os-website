@@ -33,10 +33,12 @@ async function boot(): Promise<void> {
   ]);
 
   const view = createTerminal(termEl, createLiveRegion(byId('live')));
-  const shell = new Shell(view.output);
-  const editor = createNativeInput(form, input, view, shell);
+  const editor = createNativeInput(form, input, view, (out) => new Shell(out));
 
-  trackVisualViewport(app, () => view.fit());
+  trackVisualViewport(app, () => {
+    view.fit();
+    editor.redraw();
+  });
   bindQuickKeys(byId('quickkeys'), () => editor);
 
   // Tippen auf die Ausgabe fokussiert die Eingabe (außer beim Markieren).
@@ -50,11 +52,14 @@ async function boot(): Promise<void> {
     }
   });
 
-  await matrix;
+  // Startscreen sofort rendern: die Animation läuft darüber und gibt ihn frei.
   view.fit();
   view.output.print(startscreenLines(view.term.cols));
   editor.start();
   document.documentElement.dataset.ready = 'true';
+  await matrix;
+  document.documentElement.dataset.booted = 'true';
+  editor.focus();
 }
 
 void boot();

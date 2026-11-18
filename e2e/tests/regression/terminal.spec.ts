@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { lastVisibleLine, openTerminal, run, terminalOutput } from '../helpers.ts';
+import { openTerminal, PROMPT_TEXT, run, terminalOutput, visibleLines } from '../helpers.ts';
 
 test.describe('terminal', () => {
   test('startscreen', async ({ page }) => {
@@ -17,6 +17,47 @@ test.describe('terminal', () => {
     await expect(out).toContainText('Verfügbare Commands');
     await expect(out).toContainText('clear');
     await expect(page).toHaveScreenshot('help.png');
+  });
+
+  test('prompt and typed text sit inline right after the output', async ({ page }) => {
+    await openTerminal(page);
+    await page.locator('#cmd').focus();
+    await page.keyboard.type('hel');
+    await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(`${PROMPT_TEXT} hel`);
+    // Kein Feld am unteren Rand: das Input liegt auf der Prompt-Zeile direkt unter dem Hinweis.
+    const lines = await visibleLines(page);
+    expect(lines.at(-2)).toContain('kennenzulernen');
+    const input = (await page.locator('#cmd').boundingBox())!;
+    const row = (await page
+      .locator('.xterm-rows > div')
+      .filter({ hasText: `${PROMPT_TEXT} hel` })
+      .boundingBox())!;
+    expect(Math.abs(input.y - row.y)).toBeLessThanOrEqual(4);
+    await expect(page).toHaveScreenshot('typing.png');
+  });
+
+  test('long input wraps and editing keeps the line intact', async ({ page }) => {
+    await openTerminal(page);
+    await page.locator('#cmd').focus();
+    await page.keyboard.type('x'.repeat(70));
+    await page.keyboard.press('Home');
+    await page.keyboard.type('ab');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Backspace');
+    const expected = `ab${'x'.repeat(69)}`;
+    await expect(page.locator('#cmd')).toHaveValue(expected);
+    await expect
+      .poll(async () => (await visibleLines(page)).join('').replace(/\s/g, ''))
+      .toContain(`${PROMPT_TEXT}${expected}`.replace(/\s/g, ''));
+    await page.keyboard.press('Enter');
+    await expect(terminalOutput(page)).toContainText('command not found: abxxx');
+  });
+
+  test('submitted commands stay visible behind their prompt', async ({ page }) => {
+    await openTerminal(page);
+    await run(page, 'sudo');
+    await expect(terminalOutput(page)).toContainText(`${PROMPT_TEXT} sudo`);
+    await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
   });
 
   test('unknown command', async ({ page }) => {
@@ -102,8 +143,9 @@ test.describe('mobile with open keyboard', () => {
   test('output auto-scrolls and focus stays after enter', async ({ page }) => {
     await openTerminal(page);
     for (let i = 0; i < 12; i++) await run(page, `cmd${i}`);
+    await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
     await expect
-      .poll(() => lastVisibleLine(page))
+      .poll(async () => (await visibleLines(page)).at(-2))
       .toContain("command not found: cmd11. Tippe 'help'.");
     await expect(page.locator('#cmd')).toBeFocused();
   });
@@ -126,5 +168,27 @@ test.describe('mobile with open keyboard', () => {
     await page.locator('#cmd').blur();
     await page.locator('#term').tap();
     await expect(page.locator('#cmd')).toBeFocused();
+  });
+});
+
+test.describe('boot animation', () => {
+  test.use({ reducedMotion: 'no-preference' });
+
+  test('reveals the start screen that is already rendered underneath', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#matrix')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+    await expect(terminalOutput(page)).toContainText('an ai coding project');
+    // Animation läuft noch, während der Startscreen schon da ist.
+    await expect(page.locator('html')).not.toHaveAttribute('data-booted', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-booted', 'true', { timeout: 6000 });
+    await expect(page.locator('#matrix')).toBeHidden();
+  });
+
+  test('a key press skips the animation', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('html')).toHaveAttribute('data-booted', 'true', { timeout: 1000 });
   });
 });

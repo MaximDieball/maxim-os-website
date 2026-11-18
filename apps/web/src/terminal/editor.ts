@@ -10,4 +10,6 @@ export interface LineEditor {
   clearScreen(): void;
   /** Zeigt den Prompt (nach dem Startscreen). */
   start(): void;
+  /** Zeichnet die Prompt-Zeile neu (nach Größenänderung). */
+  redraw(): void;
 }
