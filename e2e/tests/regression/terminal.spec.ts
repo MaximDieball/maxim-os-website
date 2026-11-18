@@ -13,9 +13,13 @@ test.describe('terminal', () => {
   test('help lists the registry', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'help');
-    const out = terminalOutput(page);
-    await expect(out).toContainText('Verfügbare Commands');
-    await expect(out).toContainText('clear');
+    // Vollständiger Text über die Live-Region (mobil scrollt der Anfang aus dem Bild).
+    const live = page.locator('#live');
+    await expect(live).toContainText('Verfügbare Commands');
+    for (const name of ['help', 'clear', 'ls', 'cd', 'pwd', 'cat', 'tree']) {
+      await expect(live).toContainText(name);
+    }
+    await expect(terminalOutput(page)).toContainText('tree -L 2');
     await expect(page).toHaveScreenshot('help.png');
   });
 
@@ -71,9 +75,9 @@ test.describe('terminal', () => {
     await run(page, 'clear');
     await expect(terminalOutput(page)).not.toContainText('an ai coding project');
     await run(page, 'help');
-    await expect(terminalOutput(page)).toContainText('Verfügbare Commands');
+    await expect(terminalOutput(page)).toContainText('tree -L 2');
     await page.keyboard.press('Control+l');
-    await expect(terminalOutput(page)).not.toContainText('Verfügbare Commands');
+    await expect(terminalOutput(page)).not.toContainText('tree -L 2');
   });
 
   test('history with arrow keys', async ({ page }) => {

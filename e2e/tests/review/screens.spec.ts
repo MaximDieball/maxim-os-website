@@ -25,6 +25,15 @@ test('typing', async ({ page }, info) => {
   await page.screenshot(shot(info.project.name, '04-typing'));
 });
 
+test('filesystem', async ({ page }, info) => {
+  await openTerminal(page);
+  await run(page, 'ls -la');
+  await run(page, 'cd projects');
+  await run(page, 'tree /');
+  await page.waitForTimeout(300);
+  await page.screenshot(shot(info.project.name, '05-filesystem'));
+});
+
 test('unknown and many commands', async ({ page }, info) => {
   await openTerminal(page);
   for (const c of ['ls', 'sudo rm -rf /', 'help', 'nope']) await run(page, c);
