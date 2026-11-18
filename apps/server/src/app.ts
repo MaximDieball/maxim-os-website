@@ -110,7 +110,8 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     }
     if (++globalCount > limits.global) throw new HttpError(429, TOO_MANY);
   };
-  const limited = { config: { rateLimit: {} }, onRequest: globalLimit };
+  // preHandler läuft nach dem Pro-Client-Limit (onRequest): abgewiesene Anfragen zählen nicht global.
+  const limited = { config: { rateLimit: {} }, preHandler: globalLimit };
 
   app.get('/api/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
 

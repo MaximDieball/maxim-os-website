@@ -1,6 +1,12 @@
 import { open, readdir } from 'node:fs/promises';
 import { posix } from 'node:path';
-import type { CommandResult, DirEntry, FlagValues, TreeNode } from '@maxim-os/shared';
+import {
+  printable,
+  type CommandResult,
+  type DirEntry,
+  type FlagValues,
+  type TreeNode,
+} from '@maxim-os/shared';
 import { NOT_A_DIR, type Sandbox } from './sandbox.ts';
 
 /** Ausgabe-Limits (SPEC Abschnitt 5). */
@@ -30,7 +36,7 @@ type Handler = (ctx: ServerCommandContext) => Promise<CommandResult>;
 const err = (message: string): CommandResult => ({ kind: 'error', message });
 
 /** Kürzt Benutzereingaben in Fehlermeldungen (kein Echo beliebig langer Strings). */
-const shown = (s: string): string => (s.length > 60 ? `${s.slice(0, 59)}…` : s);
+const shown = (s: string): string => printable(s, 60);
 
 /** Sichtbare Einträge eines (geprüften) Ordners: jeder Eintrag wird selbst durch die Sandbox geprüft. */
 async function listDir(
@@ -159,6 +165,11 @@ const tree: Handler = async ({ sandbox, cwd, flags, operands }) => {
     if (listed.truncated) truncated = true;
     const children: TreeNode[] = [];
     for (const entry of listed.entries) {
+      // Budget vor jedem Knoten prüfen (auch nach tiefer Rekursion in Geschwister-Ordnern).
+      if (nodes >= OUTPUT_LIMITS.treeNodes) {
+        truncated = true;
+        break;
+      }
       nodes++;
       if (entry.type === 'dir') {
         dirs++;

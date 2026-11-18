@@ -1,7 +1,7 @@
 import { COMMANDS, findCommand, parseArgs, tokenize, type CommandResult } from '@maxim-os/shared';
 import { ApiError, type ServerApi } from './api.ts';
 import { CLIENT_HANDLERS } from './commands.ts';
-import { formatCat, formatLs, formatTree } from './format.ts';
+import { clean, formatCat, formatLs, formatTree } from './format.ts';
 import { History } from './history.ts';
 import { sanitizeInput, style, truncate } from './text.ts';
 
@@ -41,7 +41,8 @@ export class Shell {
   }
 
   private error(message: string): void {
-    this.out.print([style.red(message)]);
+    // Meldungen können Teile der Eingabe bzw. Serverantwort enthalten: nie ungefiltert ausgeben.
+    this.out.print([style.red(clean(message))]);
   }
 
   /** Führt eine Eingabezeile aus. `signal` bricht laufende Server-Anfragen ab (Ctrl+C). */
