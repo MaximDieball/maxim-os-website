@@ -1,12 +1,12 @@
 import { COMMANDS } from '@maxim-os/shared';
 import { formatHelp } from './help.ts';
 import type { ClientHandler, CommandContext } from './shell.ts';
-import { truncate } from './text.ts';
+import { style, truncate } from './text.ts';
 
 /** Lehnt jeden Parameter ab (Allowlist: diese Commands haben keine). */
 function noArgs(ctx: CommandContext, name: string): boolean {
   if (ctx.args.length === 0) return true;
-  ctx.out.print([`${name}: unerwarteter Parameter: ${truncate(ctx.args[0]!, 40)}`]);
+  ctx.out.print([`${name}: ${style.red('unerwarteter Parameter:')} ${truncate(ctx.args[0]!, 40)}`]);
   return false;
 }
 

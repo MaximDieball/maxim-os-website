@@ -1,7 +1,7 @@
 import { COMMANDS, findCommand } from '@maxim-os/shared';
 import { CLIENT_HANDLERS } from './commands.ts';
 import { History } from './history.ts';
-import { sanitizeInput, truncate } from './text.ts';
+import { sanitizeInput, style, truncate } from './text.ts';
 
 /** Ausgabekanal, den das Terminal (xterm.js) bereitstellt. */
 export interface ShellOutput {
@@ -41,7 +41,9 @@ export class Shell {
     const handler =
       spec && Object.hasOwn(CLIENT_HANDLERS, spec.name) ? CLIENT_HANDLERS[spec.name] : undefined;
     if (!spec || !handler) {
-      this.out.print([`command not found: ${truncate(name, MAX_NAME_IN_ERROR)}. Tippe 'help'.`]);
+      this.out.print([
+        `${style.red('command not found:')} ${truncate(name, MAX_NAME_IN_ERROR)}. Tippe 'help'.`,
+      ]);
       return;
     }
     handler({ out: this.out, args, shell: this });

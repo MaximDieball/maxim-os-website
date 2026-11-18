@@ -22,7 +22,7 @@ function table(specs: readonly CommandSpec[], cols: number): string[] | undefine
     style.bold(line(HEADERS)),
     ...rows.map((r) => {
       const [first, ...rest] = r.map((c, i) => c.padEnd(widths[i]!));
-      return (INDENT + style.green(first!) + GAP + rest.join(GAP)).trimEnd();
+      return (INDENT + style.cyan(first!) + GAP + rest.join(GAP)).trimEnd();
     }),
   ];
 }
@@ -32,7 +32,7 @@ function stacked(specs: readonly CommandSpec[], cols: number): string[] {
   const width = Math.max(10, cols - INDENT.length);
   const out: string[] = [];
   for (const s of specs) {
-    out.push(style.green(names(s)));
+    out.push(style.bold(style.cyan(names(s))));
     for (const l of wrap(s.description, width)) out.push(INDENT + l);
     for (const l of wrap(`Usage:    ${s.usage}`, width)) out.push(INDENT + style.dim(l));
     for (const l of wrap(`Beispiel: ${s.example}`, width)) out.push(INDENT + style.dim(l));
@@ -45,5 +45,5 @@ function stacked(specs: readonly CommandSpec[], cols: number): string[] {
 /** Generiert `help` ausschließlich aus der Registry. */
 export function formatHelp(specs: readonly CommandSpec[], cols: number): string[] {
   const body = table(specs, cols) ?? stacked(specs, cols);
-  return ['Verfügbare Commands:', '', ...body];
+  return [style.bold('Verfügbare Commands:'), '', ...body];
 }

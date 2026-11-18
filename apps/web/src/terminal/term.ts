@@ -5,7 +5,33 @@ import type { ShellOutput } from '../shell/shell.ts';
 import { stripAnsi } from '../shell/text.ts';
 import type { LiveRegion } from './live.ts';
 
-export const PROMPT = '\x1b[32mguest@maxim-os\x1b[39m:\x1b[36m/\x1b[39m$ ';
+/** Prompt wie in einem modernen Linux-Terminal: user@host grün, Pfad blau. */
+export const PROMPT = '\x1b[1;32mguest@maxim-os\x1b[22;39m:\x1b[1;34m/\x1b[22;39m$ ';
+
+/** Farbpalette (schwarz/weiß mit Akzenten). CSS nutzt dieselben Werte (styles.css). */
+export const THEME = {
+  background: '#000000',
+  foreground: '#e6e6e6',
+  cursor: '#e6e6e6',
+  cursorAccent: '#000000',
+  selectionBackground: '#3a3d41',
+  black: '#000000',
+  red: '#ff6b6b',
+  green: '#4ade80',
+  yellow: '#fbbf24',
+  blue: '#60a5fa',
+  magenta: '#c084fc',
+  cyan: '#22d3ee',
+  white: '#e6e6e6',
+  brightBlack: '#7a7a7a',
+  brightRed: '#ff8787',
+  brightGreen: '#86efac',
+  brightYellow: '#fcd34d',
+  brightBlue: '#93c5fd',
+  brightMagenta: '#d8b4fe',
+  brightCyan: '#67e8f9',
+  brightWhite: '#ffffff',
+} as const;
 
 const NARROW_PX = 480;
 
@@ -28,19 +54,14 @@ export function createTerminal(container: HTMLElement, live: LiveRegion): Termin
     disableStdin: true,
     scrollback: 2000,
     allowProposedApi: false,
-    theme: {
-      background: '#0b0f0c',
-      foreground: '#c8facc',
-      cursor: '#39ff88',
-      green: '#39ff88',
-      cyan: '#5ee6d0',
-      brightBlack: '#5f7f66',
-      selectionBackground: '#2a4a33',
-    },
+    theme: THEME,
+    drawBoldTextInBrightColors: false,
   });
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
   term.open(container);
+  // Den Cursor zeichnet die Prompt-Zeile selbst (prompt-line.ts).
+  term.write('\x1b[?25l');
 
   const fit = (): void => {
     const size = fontSizeFor(container.clientWidth);

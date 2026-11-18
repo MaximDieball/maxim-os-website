@@ -43,7 +43,21 @@ export function wrap(text: string, width: number): string[] {
 export const style = {
   bold: (s: string) => `\x1b[1m${s}\x1b[22m`,
   dim: (s: string) => `\x1b[2m${s}\x1b[22m`,
-  green: (s: string) => `\x1b[32m${s}\x1b[39m`,
-  cyan: (s: string) => `\x1b[36m${s}\x1b[39m`,
   red: (s: string) => `\x1b[31m${s}\x1b[39m`,
+  green: (s: string) => `\x1b[32m${s}\x1b[39m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[39m`,
+  blue: (s: string) => `\x1b[34m${s}\x1b[39m`,
+  magenta: (s: string) => `\x1b[35m${s}\x1b[39m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[39m`,
+  /** Truecolor, z. B. für Farbverläufe. */
+  rgb: (s: string, [r, g, b]: readonly [number, number, number]) =>
+    `\x1b[38;2;${r};${g};${b}m${s}\x1b[39m`,
 };
+
+type Rgb = readonly [number, number, number];
+
+/** Linearer Farbverlauf: Farbe für Schritt `i` von `n`. */
+export function gradient(from: Rgb, to: Rgb, i: number, n: number): Rgb {
+  const t = n <= 1 ? 0 : i / (n - 1);
+  return [0, 1, 2].map((k) => Math.round(from[k]! + (to[k]! - from[k]!) * t)) as unknown as Rgb;
+}
