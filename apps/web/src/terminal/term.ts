@@ -2,11 +2,14 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { ShellOutput } from '../shell/shell.ts';
+import { clean } from '../shell/format.ts';
 import { stripAnsi } from '../shell/text.ts';
 import type { LiveRegion } from './live.ts';
 
 /** Prompt wie in einem modernen Linux-Terminal: user@host grün, Pfad blau. */
-export const PROMPT = '\x1b[1;32mguest@maxim-os\x1b[22;39m:\x1b[1;34m/\x1b[22;39m$ ';
+export function promptFor(cwd: string): string {
+  return `\x1b[1;32mguest@maxim-os\x1b[22;39m:\x1b[1;34m${clean(cwd)}\x1b[22;39m$ `;
+}
 
 /** Farbpalette (schwarz/weiß mit Akzenten). CSS nutzt dieselben Werte (styles.css). */
 export const THEME = {

@@ -2,7 +2,7 @@ import type { Shell, ShellOutput } from '../shell/shell.ts';
 import { sanitizeInput } from '../shell/text.ts';
 import type { LineEditor } from './editor.ts';
 import { renderPromptLine, type PromptState } from './prompt-line.ts';
-import { PROMPT, type TerminalView } from './term.ts';
+import { promptFor, type TerminalView } from './term.ts';
 
 /**
  * Eingabe über ein natives <input> (Spike-Entscheidung #15: robust gegen IME,
@@ -32,6 +32,9 @@ export function createNativeInput(
   let rows = 0;
   let last = '';
   let lastState: PromptState = { value: '', caret: 0, focused: false };
+  /** Ein Command läuft gerade (Server-Anfrage): kein Prompt, Ctrl+C bricht ab. */
+  let running: AbortController | undefined;
+  const prompt = (): string => promptFor(shell.cwd);
 
   const state = (focused = document.activeElement === input): PromptState => ({
     value: input.value,
@@ -53,8 +56,10 @@ export function createNativeInput(
   };
 
   const draw = (s: PromptState = state()): void => {
-    const r = renderPromptLine(PROMPT, s, term.cols, shown ? rows : 0);
-    const key = `${term.cols}|${s.focused}|${s.caret}|${s.value}`;
+    if (running) return;
+    const p = prompt();
+    const r = renderPromptLine(p, s, term.cols, shown ? rows : 0);
+    const key = `${term.cols}|${s.focused}|${s.caret}|${p}|${s.value}`;
     if (shown && key === last) return;
     last = key;
     lastState = s;
@@ -69,7 +74,8 @@ export function createNativeInput(
   /** Schließt die aktuelle Zeile ab (ohne Cursor), z. B. vor einer Ausgabe. */
   const commit = (suffix = ''): void => {
     if (!shown) return;
-    const r = renderPromptLine(PROMPT, state(false), term.cols, rows);
+    // Den zuletzt gezeichneten Inhalt abschließen (das Input-Feld kann schon leer sein).
+    const r = renderPromptLine(prompt(), { ...lastState, focused: false }, term.cols, rows);
     term.write(`${r.seq}${suffix}\r\n`);
     shown = false;
   };
@@ -94,22 +100,62 @@ export function createNativeInput(
     draw();
   };
 
+  /** Zeilen, die abgeschickt wurden, während noch ein Command lief (wie Type-ahead in bash). */
+  const queue: string[] = [];
+
+  const run = (line: string): void => {
+    const controller = new AbortController();
+    running = controller;
+    void shell.execute(line, controller.signal).finally(() => {
+      if (running !== controller) return; // per Ctrl+C abgebrochen
+      running = undefined;
+      const next = queue.shift();
+      if (next === undefined) return draw();
+      // Gepufferte Zeile wie getippt anzeigen und ausführen.
+      draw({ value: next, caret: next.length, focused: false });
+      commit();
+      run(next);
+    });
+  };
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const line = sanitizeInput(input.value);
-    commit(); // zuerst: die Zeile bleibt mit dem eingegebenen Command stehen
-    input.value = '';
-    shell.execute(line);
-    draw();
     input.focus({ preventScroll: true });
+    const line = sanitizeInput(input.value);
+    input.value = '';
+    if (running) {
+      queue.push(line);
+      return;
+    }
+    // zuerst: die Zeile bleibt mit dem eingegebenen Command stehen
+    draw({ value: line, caret: line.length, focused: false });
+    commit();
+    run(line);
   });
 
   const editor: LineEditor = {
     focus: () => input.focus({ preventScroll: true }),
-    complete: () => setValue(shell.complete(input.value)),
+    complete() {
+      if (running) return;
+      const before = input.value;
+      void shell.complete(before).then((value) => {
+        // Nur übernehmen, wenn inzwischen nicht weitergetippt wurde.
+        if (input.value === before && value !== before) setValue(value);
+        else draw();
+      });
+    },
     historyPrev: () => setValue(shell.history.prev(input.value)),
     historyNext: () => setValue(shell.history.next()),
     interrupt() {
+      if (running) {
+        // Laufende Anfrage abbrechen, gepufferte Zeilen verwerfen.
+        running.abort();
+        running = undefined;
+        queue.length = 0;
+        term.write('^C\r\n');
+        draw();
+        return;
+      }
       commit('^C');
       input.value = '';
       draw();
@@ -131,7 +177,7 @@ export function createNativeInput(
     redraw() {
       if (!shown) return;
       // xterm.js hat die Zeile beim Resize neu umgebrochen: Zeilen mit neuer Breite zählen.
-      rows = renderPromptLine(PROMPT, lastState, term.cols, 0).rows;
+      rows = renderPromptLine(prompt(), lastState, term.cols, 0).rows;
       last = '';
       draw();
     },

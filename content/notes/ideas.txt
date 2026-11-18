@@ -1,0 +1,5 @@
+Ideen
+
+- snake im Terminal
+- Minecraft-Serverstatus
+- Steckbrief mit ASCII-Bild
