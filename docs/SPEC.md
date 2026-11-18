@@ -108,7 +108,7 @@ Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-
 
 ### steckbrief
 
-Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Repos), gecached oder zur Buildzeit geholt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei ausgeliefert (ich stelle das Foto bereit, bis dahin ein Platzhalter).
+Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Repos), gecached oder zur Buildzeit geholt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei ausgeliefert (ich stelle das Foto bereit, bis dahin ein Platzhalter). Im Ordner headshot liegen ein paar dateien die sich vielleicht für diese Anwendung eigenen
 
 ### Weitere Basis-Commands (clientseitig)
 
