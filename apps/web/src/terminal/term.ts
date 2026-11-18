@@ -16,11 +16,7 @@ export interface TerminalView {
   fit(): void;
 }
 
-export function createTerminal(
-  container: HTMLElement,
-  live: LiveRegion,
-  withStdin: boolean,
-): TerminalView {
+export function createTerminal(container: HTMLElement, live: LiveRegion): TerminalView {
   const term = new Terminal({
     fontFamily: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace',
     fontSize: fontSizeFor(container.clientWidth),
@@ -28,7 +24,8 @@ export function createTerminal(
     cursorBlink: false,
     cursorStyle: 'block',
     cursorInactiveStyle: 'none',
-    disableStdin: !withStdin,
+    // Eingabe läuft ausschließlich über das native <input> (Spike-Entscheidung, #15).
+    disableStdin: true,
     scrollback: 2000,
     allowProposedApi: false,
     theme: {

@@ -37,9 +37,9 @@ export default defineConfig({
     { name: 'mobile-390', use: mobile(390, 844) },
     { name: 'mobile-360', use: mobile(360, 640) },
     {
-      // Nur für den Eingabe-Spike: iOS-Safari-Engine, keine Screenshot-Regression.
+      // Nur Eingabe-Tests (@input): iOS-Safari-Engine, keine Screenshot-Regression.
       name: 'mobile-webkit',
-      grep: /@spike/,
+      grep: /@input/,
       use: { ...devices['iPhone 14'], viewport: { width: 390, height: withKeyboard(844) } },
     },
   ],

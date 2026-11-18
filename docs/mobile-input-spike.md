@@ -4,18 +4,18 @@ Frage aus SPEC 4a: Funktioniert die Texteingabe über xterm.js auf Android (Chro
 
 ## Die zwei Varianten
 
-Beide Varianten sind gebaut und lassen sich per URL-Parameter umschalten. Ausgabe, History, Tab-Completion und Quick-Key-Leiste sind identisch, nur die Eingabe ist verschieden.
+Während des Spikes waren beide Varianten gebaut und per URL-Parameter umschaltbar (seit #41 gibt es nur noch `native`, `?input=` wird ignoriert). Ausgabe, History, Tab-Completion und Quick-Key-Leiste sind identisch, nur die Eingabe ist verschieden.
 
 | Variante              | URL                       | Wie getippt wird                                                                                                                                         |
 | --------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **native** (Standard) | `/` oder `/?input=native` | Sichtbares `<input>` direkt unter der xterm.js-Ausgabe. xterm.js zeigt nur die Ausgabe an, seine interne Textarea ist `readonly` und nicht fokussierbar. |
 | **xterm**             | `/?input=xterm`           | Klassisch: xterm.js bekommt den Fokus, Zeichen kommen über `term.onData`, die Zeile wird im Terminal selbst bearbeitet.                                  |
 
-Mit `?boot=skip` lässt sich die Matrix-Animation überspringen, z. B. `/?input=xterm&boot=skip`.
+Mit `?boot=skip` lässt sich die Matrix-Animation überspringen, z. B. `/?boot=skip`.
 
 ## Ergebnis der automatisierten Tests
 
-Playwright-Tests mit dem Tag `@spike` (`e2e/tests/regression/spike.spec.ts`) laufen für beide Varianten auf Desktop-Chromium, mobilem Chromium (390 und 360 px) und mobilem WebKit (iPhone-14-Emulation): Tippen + Enter, History über die Quick-Keys, Steuerzeichen werden nicht übernommen. **Beide Varianten bestehen alle Tests.**
+Während des Spikes liefen Playwright-Tests mit dem Tag `@spike` für beide Varianten auf Desktop-Chromium, mobilem Chromium (390 und 360 px) und mobilem WebKit (iPhone-14-Emulation): Tippen + Enter, History über die Quick-Keys, Steuerzeichen werden nicht übernommen. **Beide Varianten bestanden alle Tests.** Seit #41 prüft `e2e/tests/regression/mobile-input.spec.ts` (Tag `@input`) nur noch `native`.
 
 Das sagt aber wenig über echte Geräte. Playwright schickt fertige Key-Events, echte Bildschirmtastaturen tun das nicht:
 
@@ -33,7 +33,7 @@ Ein normales, sichtbares `<input>` hat diese Probleme nicht, weil der Browser se
 - Cursor bewegen, markieren und einfügen funktionieren mobil wie gewohnt, ohne eigene Zeilenbearbeitung.
 - Nachteil: Die Eingabezeile sitzt optisch unter der Ausgabe statt im Terminal-Fluss. Der Prompt wird beim Absenden in die Ausgabe geschrieben, sodass der Verlauf trotzdem wie ein Terminal aussieht.
 
-Die Variante `xterm` bleibt bis zur Entscheidung als Vergleich drin und wird danach entfernt (eigenes Ticket).
+Die Variante `xterm` wurde nach der Entscheidung entfernt (#41). Die Beschreibung oben bleibt als Begründung stehen.
 
 ## Testanleitung für echte Geräte
 
@@ -56,7 +56,7 @@ Falls das Handy die Seite nicht lädt: Die macOS-Firewall fragt beim ersten Zugr
 
 ### Checkliste
 
-Jede Zeile einmal mit `?input=native&boot=skip` und einmal mit `?input=xterm&boot=skip` durchgehen, auf Android (Chrome) und iOS (Safari). Gerne mit der Standardtastatur **und** mit aktivierter Autokorrektur/Wortvorschlägen.
+Jede Zeile mit `?boot=skip` durchgehen, auf Android (Chrome) und iOS (Safari). Gerne mit der Standardtastatur **und** mit aktivierter Autokorrektur/Wortvorschlägen.
 
 | #   | Prüfen                                                                  | Erwartung                                                                     |
 | --- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -73,8 +73,8 @@ Jede Zeile einmal mit `?input=native&boot=skip` und einmal mit `?input=xterm&boo
 | 11  | In der Ausgabe nach oben scrollen, dann wieder tippen                   | Fokus bleibt bzw. kommt zurück, Ausgabe springt beim Absenden nach unten      |
 | 12  | iOS: Zoomt die Seite beim Fokussieren?                                  | Nein                                                                          |
 
-Notiere pro Gerät, Browser und Variante die Nummern, die nicht passen. Das reicht mir als Rückmeldung.
+Notiere pro Gerät und Browser die Nummern, die nicht passen. Das reicht mir als Rückmeldung.
 
 ## Entscheidung
 
-- [ ] Vom Besitzer bestätigt: Variante `native` (oder: `xterm`, Begründung)
+- [x] Vom Besitzer bestätigt am 18.11.2026: Variante `native`.

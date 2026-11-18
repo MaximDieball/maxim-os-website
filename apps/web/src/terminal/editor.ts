@@ -1,4 +1,4 @@
-/** Gemeinsame Schnittstelle beider Eingabevarianten (Spike: native vs. xterm). */
+/** Zeilen-Editor, den Shell, Quick-Keys und Tastaturkürzel bedienen. */
 export interface LineEditor {
   focus(): void;
   complete(): void;
@@ -10,10 +10,4 @@ export interface LineEditor {
   clearScreen(): void;
   /** Zeigt den Prompt (nach dem Startscreen). */
   start(): void;
-}
-
-export type InputMode = 'native' | 'xterm';
-
-export function inputModeFromUrl(search: string): InputMode {
-  return new URLSearchParams(search).get('input') === 'xterm' ? 'xterm' : 'native';
 }

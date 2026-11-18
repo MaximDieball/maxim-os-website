@@ -23,12 +23,6 @@ test('unknown and many commands', async ({ page }, info) => {
   await page.screenshot(shot(info.project.name, '03-scrolled'));
 });
 
-test('xterm input variant', async ({ page }, info) => {
-  await openTerminal(page, 'xterm');
-  await run(page, 'help', 'xterm');
-  await page.screenshot(shot(info.project.name, '04-xterm-variant'));
-});
-
 test.describe('boot animation', () => {
   test.use({ reducedMotion: 'no-preference' });
   test('matrix', async ({ page }, info) => {
