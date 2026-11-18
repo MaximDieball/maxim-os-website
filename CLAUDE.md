@@ -15,6 +15,17 @@ Persönliche Website, die ein Terminal simuliert ("MAXIM OS", "an ai coding proj
 - Tests: Vitest (Unit/API), Playwright (UI).
 - CI: GitHub Actions.
 
+## Mobile-first (wichtig)
+
+Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren. Das Terminal ist dort ein Terminal mit **dauerhaft geöffneter Bildschirmtastatur**. Davon geht das UI immer aus.
+
+- Das Layout orientiert sich an der **sichtbaren Fläche über der Tastatur** (`visualViewport`, `dvh`), nicht an der Fensterhöhe ohne Tastatur. Die Eingabezeile und die letzte Ausgabe bleiben immer sichtbar, die Ausgabe scrollt automatisch nach unten.
+- Das Eingabefeld hat `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"` und mindestens 16 px Schrift (sonst zoomt iOS beim Fokus). Die Tastatur wird nicht durch Seitenwechsel oder Re-Rendern geschlossen.
+- Für Tasten, die es mobil nicht gibt (Tab, Pfeil hoch/runter, Ctrl+C), gibt es eine **Quick-Key-Leiste** direkt über der Tastatur.
+- Ausgaben (`help`, `ls`, `tree`, ASCII-Art) brechen auf schmalen Bildschirmen (ca. 360 px Breite) sinnvoll um bzw. nutzen eine schmale Variante.
+- **Minigames (`snake` usw.) sind mobil nicht unterstützt.** Auf Handys erscheint vor dem Start eine Warnung (siehe Prompt). Es gibt dafür keine Touch-Steuerung.
+- Alle UI-Änderungen werden auch im **mobilen Hochformat** getestet (Playwright-Viewports, siehe Entwicklungsregeln).
+
 ## Docker-Regel (wichtig)
 
 **Alles läuft in Docker-Containern: Entwicklung, Tests, UI-Tests und Ausführen der Website.** Auf dem Host wird weder `node`, `pnpm` noch `playwright` direkt ausgeführt. Für alle Aufgaben gibt es Docker-Compose-Services und kurze Wrapper (Makefile oder Skripte), z. B. `make dev`, `make test`, `make test-ui`, `make test-ui-screenshots`, `make lint`, `make build`.
@@ -38,6 +49,7 @@ Persönliche Website, die ein Terminal simuliert ("MAXIM OS", "an ai coding proj
 - **Test-driven development:** zuerst der Test, dann der Code. Besonders gründlich beim Pfad-Validator (Traversal, Symlinks, Encoding, absolute Pfade, Null-Bytes) und beim Command-Parser.
 - **UI-Screenshot-Tests (lokal):** Playwright erzeugt Screenshots, die du dir als Entwickler ansiehst. Sie sind **nicht** Teil der Pipeline und liegen in einem git-ignorierten Ordner.
 - **Regressionstests (Pipeline):** Nur `toHaveScreenshot()`-Tests, die prüfen, dass sich nichts verändert hat, was unverändert bleiben soll.
+- **Playwright-Projekte:** mindestens Desktop (1280×800) und mobiles Hochformat (z. B. 390×844 und 360×640). Die mobilen Tests simulieren die offene Tastatur, indem sie die sichtbare Höhe verkleinern (ca. 40–50 % der Höhe).
 - Vor jedem Push muss die Pipeline-Checkliste lokal grün sein: Lint, Typecheck, Vitest, Playwright-Regression, Build (alles per Docker).
 - Die Command-Registry (Name, Aliase, Beschreibung, Usage, Beispiel, Handler) ist die einzige Quelle für `help`.
 - Commit-Messages kurz und aussagekräftig, kleine Commits, nach jedem Meilenstein ein Commit/Tag.

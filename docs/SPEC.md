@@ -24,7 +24,7 @@ Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln 
 
 ## 1. Meilensteine
 
-1. **Skeleton:** Monorepo, Docker-Setup, CI-Pipeline, Startup-Animation, Startscreen, Command-Registry, `help`, `clear`, Fehlermeldung für unbekannte Commands.
+1. **Skeleton:** Monorepo, Docker-Setup, CI-Pipeline, Startup-Animation, Startscreen, Command-Registry, `help`, `clear`, Fehlermeldung für unbekannte Commands, **mobiles Terminal-Layout inklusive Eingabe-Spike** (siehe Abschnitt 4a). Ab hier wird jeder Meilenstein auch mobil geprüft.
 2. **Dateisystem:** Content-Ordner, Allowlist-Generator, Pfad-Validator, `ls`, `cd`, `pwd`, `cat`, `tree`, Rate-Limiting und Eingabe-Limits. Danach der Review-Subagent.
 3. **Steckbrief:** `steckbrief` mit GitHub-Daten und vorgerendertem ASCII-Bild, dazu `about`, `whoami`, `projects`.
 4. **Spiele und Links:** `snake` und `watchthis`.
@@ -94,7 +94,7 @@ Gleiche Validierung und Allowlist wie `ls`. Nur lesend. `cat` hat ein Größenli
 Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplett im Frontend implementiert und existiert nicht als Datei auf dem Server.
 
 - Es läuft im Terminal im ASCII-Stil. Während des Spiels wird nichts anderes im Terminal angezeigt.
-- Steuerung per Pfeiltasten und WASD, auf Mobilgeräten per Swipe oder On-Screen-Buttons.
+- Steuerung per Pfeiltasten und WASD. Auf Mobilgeräten wird das Spiel **nicht unterstützt** (siehe Abschnitt 4a: Warnung vor dem Start).
 - **Beenden:** `Ctrl+C` und `Esc`. Das muss auf Mac und Windows mit verschiedenen Tastaturlayouts funktionieren. Auf Mac ist die Taste `Ctrl` (nicht `Cmd`). Browser-Kollisionen mit Copy (Windows) beachten und im Spielmodus abfangen. Zusätzlich gibt es **oben links ein ✕**, mit dem man das Spiel verlässt.
 - Zeige Score und Highscore (lokal, im `localStorage`).
 
@@ -108,7 +108,7 @@ Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-
 
 ### steckbrief
 
-Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Repos), gecached oder zur Buildzeit geholt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei ausgeliefert (ich stelle das Foto bereit, bis dahin ein Platzhalter). Im Ordner headshot liegen ein paar dateien die sich vielleicht für diese Anwendung eigenen
+Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Repos), gecached oder zur Buildzeit geholt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei ausgeliefert (ich stelle das Foto bereit, bis dahin ein Platzhalter).
 
 ### Weitere Basis-Commands (clientseitig)
 
@@ -116,7 +116,38 @@ Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Rep
 
 ### Terminal-UX
 
-Tab-Completion für Commands und Pfade, Pfeil hoch/runter für die History, Ctrl+L für `clear`, bedienbar auf Mobile (virtuelle Tastatur) und per Screenreader (ARIA-Live-Region für die Ausgabe).
+Tab-Completion für Commands und Pfade, Pfeil hoch/runter für die History, Ctrl+L für `clear`, bedienbar per Screenreader (ARIA-Live-Region für die Ausgabe). Die mobile Bedienung ist in Abschnitt 4a beschrieben.
+
+---
+
+## 4a. Mobile (Hochformat, Tastatur immer offen)
+
+Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren. Da es ein Terminal ist, gehst du davon aus, dass die **Bildschirmtastatur die ganze Zeit offen ist**. Das UI ist dafür gebaut, nicht nur "irgendwie nutzbar".
+
+**Layout und Tastatur**
+- Das Terminal nutzt nur die **sichtbare Fläche über der Tastatur**. Dafür verwendest du `window.visualViewport` (Resize- und Scroll-Events) und `dvh`-Einheiten, nicht `100vh`. Die Eingabezeile sitzt immer direkt über der Tastatur und wird nie verdeckt.
+- Die Ausgabe scrollt automatisch zur neuesten Zeile, auch wenn sich die sichtbare Höhe ändert (Tastatur öffnet, Browser-Leiste verschwindet, Gerät dreht).
+- Die Tastatur bleibt offen. Der Fokus geht beim Absenden eines Commands, beim Scrollen und beim Tippen auf die Ausgabe nicht verloren. Ein Tippen auf die Terminal-Fläche fokussiert die Eingabe.
+- Das Eingabefeld hat `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"` und mindestens 16 px Schrift (sonst zoomt iOS beim Fokus). Setze `enterkeyhint="send"` und prüfe, dass die Enter-Taste den Command absendet.
+- Sicherheitsbereiche (`env(safe-area-inset-*)`) werden beachtet.
+
+**Quick-Key-Leiste**
+Direkt über der Tastatur gibt es eine schmale Leiste mit den Tasten, die mobil fehlen: `Tab`, `↑`, `↓` (History), `Ctrl+C` (Abbrechen) und optional `/`, `~`, `-`. Sie nimmt der Tastatur nicht den Fokus.
+
+**Darstellung**
+- Schmale Bildschirme (ab ca. **360 px Breite**) werden unterstützt. Die Schriftgröße ist so gewählt, dass eine sinnvolle Zeilenbreite entsteht (z. B. 40–45 Zeichen).
+- Ausgaben von `help`, `ls`, `tree`, `minecraft` und `steckbrief` brechen sinnvoll um oder haben eine **schmale Variante** (z. B. kürzere Tabellen, `help` mit untereinander statt nebeneinander stehenden Feldern).
+- Der ASCII-Schriftzug "MAXIM OS" und das ASCII-Bild des Steckbriefs haben jeweils eine **schmale mobile Version**, die ohne Zeilenumbruch in die Breite passt.
+- Die Matrix-Animation läuft auch mobil flüssig (Zeichenanzahl an die Breite anpassen) und ist überspringbar.
+
+**Eingabe-Spike (in Meilenstein 1, vor dem weiteren Ausbau)**
+xterm.js ist auf Mobilgeräten bei der Texteingabe bekanntermaßen heikel (Autokorrektur, Komposition, Zeichen-Events). Prüfe deshalb früh, ob die Eingabe mit xterm.js auf Android (Chrome) und iOS (Safari) zuverlässig funktioniert. Wenn nicht, schlägst du eine Alternative vor, zum Beispiel ein eigenes, sichtbares Eingabefeld unter der xterm.js-Ausgabe oder eine eigene Terminal-Darstellung. Die Entscheidung legst du mir mit kurzer Begründung vor, bevor du auf dieser Basis weiterbaust. Echte Geräte kann ich testen, du lieferst mir dafür eine Testanleitung (URL im LAN, was ich prüfen soll).
+
+**Minigames auf dem Handy**
+- Minigames (`snake` und künftige) sind mobil **nicht unterstützt**, es gibt keine Touch-Steuerung.
+- Erkennung: Touch-Gerät ohne feinen Zeiger (`matchMedia('(pointer: coarse)')` kombiniert mit `(hover: none)`) oder sehr schmaler Viewport.
+- Vor dem Start erscheint im Terminal eine Warnung, z. B. `⚠ Snake wird auf Handys nicht unterstützt. Trotzdem starten? (y/N)`. Standard ist Abbruch. Bei `y` startet das Spiel, ohne dass die Steuerung angepasst wird.
+- Auch auf Tablets mit Tastatur soll der Start möglich sein, wenn der Nutzer mit `y` bestätigt.
 
 ---
 
@@ -137,6 +168,8 @@ Tab-Completion für Commands und Pfade, Pfeil hoch/runter für die History, Ctrl
 - **UI-Tests mit Playwright, die Screenshots erzeugen.** Du schaust sie dir als Entwickler an, um das UI zu prüfen. Sie laufen lokal im Playwright-Container und **nicht** in der Pipeline. Die Screenshots landen in einem git-ignorierten Ordner.
 - **In der Pipeline** laufen nur UI-Tests, die per `toHaveScreenshot()` prüfen, dass sich nichts verändert hat, was eigentlich unverändert bleiben sollte.
 - Die Baselines werden ausschließlich im Playwright-Container erzeugt, damit lokal und in der CI identisch gerendert wird.
+- Playwright läuft mit mehreren Projekten: Desktop (1280×800) und mobiles Hochformat (mindestens 390×844 und 360×640). Mobile Tests simulieren die offene Tastatur, indem sie die sichtbare Höhe verkleinern (ca. 40–50 %), und prüfen: Eingabezeile sichtbar, Ausgabe scrollt nach unten, Quick-Key-Leiste sichtbar, kein horizontales Scrollen, Snake zeigt die Warnung.
+- Die mobilen Screenshots schaust du dir wie die Desktop-Screenshots als Entwickler an. In die Pipeline kommen nur die Regressionstests.
 
 ---
 
@@ -200,6 +233,10 @@ maxim-os-website/
 - [ ] Alles (Dev, Tests, UI-Tests, Ausführen) läuft in Docker-Containern, auf dem Host ist nichts außer Docker nötig.
 - [ ] Startup-Animation (Matrix) und Startscreen "MAXIM OS" funktionieren, die Animation ist überspringbar.
 - [ ] `help` listet alle Commands mit Beschreibung, Usage und Beispiel (aus der Registry generiert).
+- [ ] Die Seite funktioniert im Hochformat ab 360 px Breite mit dauerhaft offener Tastatur: Eingabezeile immer sichtbar, Auto-Scroll, Fokus bleibt, keine Autokorrektur, kein iOS-Zoom, Quick-Key-Leiste vorhanden.
+- [ ] Schmale Varianten für Schriftzug, Steckbrief-Bild und breite Ausgaben sind vorhanden, es gibt kein horizontales Scrollen.
+- [ ] Mobile Eingabe wurde geprüft (Spike-Ergebnis dokumentiert), Testanleitung für echte Geräte liegt vor.
+- [ ] `snake` zeigt auf Handys eine Warnung mit Abfrage (y/N) und startet standardmäßig nicht.
 - [ ] `ls`, `cd`, `pwd`, `cat`, `tree` arbeiten nur innerhalb des Content-Ordners. Alle Traversal- und Symlink-Tests schlagen erwartungsgemäß fehl, der Review-Subagent hat keine offenen Funde.
 - [ ] Im Server wird nirgends ein Prozess gestartet (kein `child_process`).
 - [ ] `snake` läuft im Terminal, lässt sich per Ctrl+C, Esc und ✕ beenden (Mac und Windows getestet).
