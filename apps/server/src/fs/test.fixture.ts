@@ -12,6 +12,8 @@ import { join } from 'node:path';
  *   <base>/content/docs/deep/b.txt
  *   <base>/content/ümlaut.txt
  *   <base>/content/binary.bin         enthält Null-Bytes
+ *   <base>/content/big.txt            größer als das cat-Limit
+ *   <base>/content/ansi.txt           enthält Escape-Sequenzen
  *   <base>/content/link-inside   ->   docs/a.txt          (erlaubt)
  *   <base>/content/link-dir      ->   docs                (erlaubt)
  *   <base>/content/link-out      ->   ../secret/passwd.txt (verboten)
@@ -41,6 +43,8 @@ export function createFixture(): Fixture {
   writeFileSync(join(content, 'docs', 'deep', 'b.txt'), 'B\n');
   writeFileSync(join(content, 'ümlaut.txt'), 'Ü\n');
   writeFileSync(join(content, 'binary.bin'), Buffer.from([0x50, 0x4b, 0x00, 0x01, 0x02]));
+  writeFileSync(join(content, 'big.txt'), 'x'.repeat(70 * 1024));
+  writeFileSync(join(content, 'ansi.txt'), 'rot: \u001b[31mX\u001b[0m\r\nende\u0007\n');
   symlinkSync('docs/a.txt', join(content, 'link-inside'));
   symlinkSync('docs', join(content, 'link-dir'));
   symlinkSync('../secret/passwd.txt', join(content, 'link-out'));
