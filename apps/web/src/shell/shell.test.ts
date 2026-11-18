@@ -141,7 +141,9 @@ describe('Shell', () => {
   it('lists candidates when completion is ambiguous', () => {
     const { out, lines } = fakeOutput();
     const sh = new Shell(out);
-    expect(sh.complete('c')).toBe('cl');
-    expect(lines.join(' ')).toMatch(/clear/);
+    // c -> cat, cd, clear, cls: gemeinsamer Präfix bleibt "c", Kandidaten werden gelistet
+    expect(sh.complete('c')).toBe('c');
+    expect(lines.join(' ')).toMatch(/cat +cd +clear +cls/);
+    expect(sh.complete('cl')).toBe('cl');
   });
 });
