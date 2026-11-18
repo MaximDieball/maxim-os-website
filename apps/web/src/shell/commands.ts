@@ -1,21 +1,12 @@
 import { COMMANDS } from '@maxim-os/shared';
 import { formatHelp } from './help.ts';
-import type { ClientHandler, CommandContext } from './shell.ts';
-import { style, truncate } from './text.ts';
+import type { ClientHandler } from './shell.ts';
 
-/** Lehnt jeden Parameter ab (Allowlist: diese Commands haben keine). */
-function noArgs(ctx: CommandContext, name: string): boolean {
-  if (ctx.args.length === 0) return true;
-  ctx.out.print([`${name}: ${style.red('unerwarteter Parameter:')} ${truncate(ctx.args[0]!, 40)}`]);
-  return false;
-}
-
-/** Clientseitige Handler, Schlüssel ist der Registry-Name. */
+/**
+ * Clientseitige Handler, Schlüssel ist der Registry-Name. Flags und Argumente
+ * sind vorher schon gegen die Registry geprüft (parseArgs in Shell.execute).
+ */
 export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.freeze({
-  help: (ctx) => {
-    if (noArgs(ctx, 'help')) ctx.out.print(formatHelp(COMMANDS, ctx.out.cols()));
-  },
-  clear: (ctx) => {
-    if (noArgs(ctx, 'clear')) ctx.out.clear();
-  },
+  help: (ctx) => ctx.out.print(formatHelp(COMMANDS, ctx.out.cols())),
+  clear: (ctx) => ctx.out.clear(),
 });

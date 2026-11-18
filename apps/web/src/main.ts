@@ -3,6 +3,7 @@ import '@fontsource/jetbrains-mono/700.css';
 import './styles.css';
 import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
+import { createServerApi } from './shell/api.ts';
 import { Shell } from './shell/shell.ts';
 import { createLiveRegion } from './terminal/live.ts';
 import { createNativeInput } from './terminal/native-input.ts';
@@ -34,7 +35,7 @@ async function boot(): Promise<void> {
   ]);
 
   const view = createTerminal(termEl, createLiveRegion(byId('live')));
-  const editor = createNativeInput(form, input, view, (out) => new Shell(out));
+  const editor = createNativeInput(form, input, view, (out) => new Shell(out, createServerApi()));
 
   trackVisualViewport(app, () => {
     view.fit();

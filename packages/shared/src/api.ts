@@ -56,7 +56,8 @@ export type CommandResult =
   | { kind: 'pwd'; cwd: string }
   | { kind: 'cat'; path: string; text: string }
   | { kind: 'tree'; path: string; root: TreeNode; dirs: number; files: number; truncated: boolean }
-  | { kind: 'error'; message: string };
+  /** resetCwd: Das vom Client geschickte Verzeichnis war ungültig, zurück zur Wurzel. */
+  | { kind: 'error'; message: string; resetCwd?: boolean };
 
 export interface CompleteResponse {
   /** Vollständige Kandidaten (inkl. Ordnerpfad aus `partial`), Ordner enden auf "/". */

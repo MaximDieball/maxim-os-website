@@ -131,7 +131,13 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
 
       // Das Verzeichnis kommt vom Client und wird bei jedem Request neu geprüft.
       const dir = await sandbox.resolveCwd(cwd);
-      if (!dir.ok) return { kind: 'error', message: `Aktueller Ordner ungültig: ${dir.error}` };
+      if (!dir.ok) {
+        return {
+          kind: 'error',
+          message: `Aktueller Ordner ungültig: ${dir.error}`,
+          resetCwd: true,
+        };
+      }
 
       return handler({ sandbox, cwd: dir.path, flags: argv.flags, operands: argv.operands });
     });
