@@ -1,0 +1,11 @@
+pnpm-lock.yaml
+dist
+artifacts
+assets
+content
+e2e/__snapshots__
+e2e/test-results
+e2e/playwright-report
+docs/SPEC.md
+CLAUDE.md
+.claude
