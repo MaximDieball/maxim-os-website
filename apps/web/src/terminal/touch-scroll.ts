@@ -42,14 +42,23 @@ export interface TouchScrollTarget {
   cellHeight(): number;
 }
 
+/** Beobachtungen für die Diagnose-Anzeige (?debug=touch, nur Dev). */
+export interface TouchScrollDebug {
+  event(type: string, info: Record<string, unknown>): void;
+}
+
 /**
- * Bindet Wisch-Scrolling an `root`. Gesten, die in `exclude` beginnen (z. B. der
- * horizontal scrollbaren Quick-Key-Leiste), bleiben beim Browser.
+ * Wisch-Scrolling für alles innerhalb von `root`. Die Listener hängen am
+ * `window` in der Capture-Phase, laufen also vor allen anderen (auch vor der
+ * Gestenerkennung, die xterm.js 6 am `document` registriert) und übernehmen die
+ * Geste komplett. Gesten, die in `exclude` beginnen (z. B. der horizontal
+ * scrollbaren Quick-Key-Leiste), bleiben beim Browser.
  */
 export function bindTouchScroll(
   root: HTMLElement,
   target: TouchScrollTarget,
   exclude: (el: Element) => boolean,
+  debug?: TouchScrollDebug,
 ): void {
   let tracking = false;
   let lastY = 0;
@@ -58,17 +67,28 @@ export function bindTouchScroll(
   let acc = new LineAccumulator(1);
   let raf = 0;
 
+  const inside = (e: TouchEvent): boolean => {
+    const el = e.target instanceof Element ? e.target : null;
+    return !!el && root.contains(el) && !exclude(el);
+  };
+  const scroll = (lines: number): void => {
+    if (!lines) return;
+    target.scrollLines(lines);
+    debug?.event('scroll', { lines });
+  };
   const stopMomentum = (): void => {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
   };
 
-  root.addEventListener(
+  window.addEventListener(
     'touchstart',
     (e) => {
       stopMomentum();
-      tracking = e.touches.length === 1 && !exclude(e.target as Element);
+      tracking = e.touches.length === 1 && inside(e);
+      debug?.event('touchstart', { tracking, cell: target.cellHeight() });
       if (!tracking) return;
+      e.stopPropagation(); // xterm.js-Gesten sollen nichts davon sehen
       lastY = e.touches[0]!.clientY;
       lastT = e.timeStamp;
       velocity = 0;
@@ -77,7 +97,7 @@ export function bindTouchScroll(
     { passive: true, capture: true },
   );
 
-  root.addEventListener(
+  window.addEventListener(
     'touchmove',
     (e) => {
       if (!tracking || e.touches.length !== 1) return;
@@ -90,27 +110,28 @@ export function bindTouchScroll(
       lastY = y;
       lastT = e.timeStamp;
       velocity = 0.8 * (dy / dt) + 0.2 * velocity;
-      const lines = acc.feed(dy);
-      if (lines) target.scrollLines(lines);
+      debug?.event('touchmove', { dy: Math.round(dy), prevented: e.defaultPrevented });
+      scroll(acc.feed(dy));
     },
     { passive: false, capture: true },
   );
 
-  const end = (): void => {
+  const end = (e: TouchEvent): void => {
     if (!tracking) return;
     tracking = false;
+    e.stopPropagation();
+    debug?.event(e.type, { velocity: Math.round(velocity * 100) / 100 });
     if (Math.abs(velocity) < MIN_SPEED * 3) return;
     let prev = performance.now();
     const step = (now: number): void => {
       const dt = now - prev;
       prev = now;
-      const lines = acc.feed(velocity * dt);
-      if (lines) target.scrollLines(lines);
+      scroll(acc.feed(velocity * dt));
       velocity = momentumStep(velocity, dt);
       raf = velocity ? requestAnimationFrame(step) : 0;
     };
     raf = requestAnimationFrame(step);
   };
-  root.addEventListener('touchend', end, { capture: true });
-  root.addEventListener('touchcancel', end, { capture: true });
+  window.addEventListener('touchend', end, { capture: true });
+  window.addEventListener('touchcancel', end, { capture: true });
 }

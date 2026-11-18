@@ -43,16 +43,23 @@ async function boot(): Promise<void> {
   const quickkeys = byId('quickkeys');
   bindQuickKeys(quickkeys, () => editor);
   // Wischen über die Ausgabe scrollt den Verlauf (iOS Safari kann das mit xterm.js nicht selbst).
+  const debugTouch =
+    import.meta.env.DEV && new URLSearchParams(location.search).get('debug') === 'touch'
+      ? (await import('./terminal/touch-debug.ts')).createTouchDebug(view.term)
+      : undefined;
   bindTouchScroll(
     app,
     {
       scrollLines: (n) => view.term.scrollLines(n),
       cellHeight: () => {
         const screen = termEl.querySelector<HTMLElement>('.xterm-screen');
-        return screen && view.term.rows ? screen.clientHeight / view.term.rows : 0;
+        const measured = screen && view.term.rows ? screen.clientHeight / view.term.rows : 0;
+        // Fallback, falls das Element (noch) keine Höhe hat.
+        return measured > 0 ? measured : (view.term.options.fontSize ?? 15) * 1.15;
       },
     },
     (el) => quickkeys.contains(el),
+    debugTouch,
   );
 
   // Tippen auf die Ausgabe fokussiert die Eingabe (außer beim Markieren).
