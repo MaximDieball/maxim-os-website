@@ -1,0 +1,3 @@
+#!/bin/sh
+# Lehnt Commits ohne Ticketnummer (#<nr>) ab. Aktivieren: make hooks
+exec "$(git rev-parse --show-toplevel)/scripts/check-ticket-ref.sh" msg "$1"

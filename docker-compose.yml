@@ -1,0 +1,90 @@
+# Entwicklung und Tests. Production: docker-compose.prod.yml (Meilenstein 6).
+name: maxim-os
+
+x-node: &node
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.dev
+  image: maxim-os-dev:local
+  working_dir: /app
+  environment:
+    CI: ${CI:-}
+  volumes:
+    - .:/app
+    - nm-root:/app/node_modules
+    - nm-shared:/app/packages/shared/node_modules
+    - nm-web:/app/apps/web/node_modules
+    - nm-server:/app/apps/server/node_modules
+    - nm-e2e:/app/e2e/node_modules
+
+services:
+  # make dev: Vite (5173, im LAN erreichbar) + Fastify (3000) mit Hot-Reload.
+  dev:
+    <<: *node
+    command: ['pnpm', 'dev']
+    ports:
+      - '5173:5173'
+    environment:
+      CI: ${CI:-}
+      PORT: '3000'
+      CONTENT_DIR: /app/content
+      # Vite pollt Dateien: Unter Colima/Docker Desktop fehlen sonst Änderungen vom Host (#51).
+      VITE_WATCH_POLLING: '1'
+
+  # make lint/typecheck/test: einmalige Tasks im selben Image.
+  tools:
+    <<: *node
+    profiles: ['tools']
+    command: ['true']
+
+  # Production-Build, auch Ziel der Playwright-Tests.
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prod
+    image: maxim-os-app:local
+    profiles: ['test']
+    # Eigener Hostname: "app" ist eine HSTS-preloaded TLD, Chromium würde HTTPS erzwingen.
+    networks:
+      default:
+        aliases: [maxim-os-app]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    volumes:
+      - ./content:/content:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  playwright:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.playwright
+    image: maxim-os-playwright:local
+    profiles: ['test']
+    depends_on:
+      app:
+        condition: service_healthy
+    ipc: host
+    environment:
+      BASE_URL: http://maxim-os-app:3000
+      CI: ${CI:-}
+    volumes:
+      - ./e2e/playwright.config.ts:/e2e/playwright.config.ts:ro
+      - ./e2e/tests:/e2e/tests:ro
+      - ./e2e/__snapshots__:/e2e/__snapshots__
+      - ./artifacts:/e2e/artifacts
+
+volumes:
+  nm-root:
+  nm-shared:
+  nm-web:
+  nm-server:
+  nm-e2e:

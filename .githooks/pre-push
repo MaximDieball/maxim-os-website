@@ -1,0 +1,16 @@
+#!/bin/sh
+# Vor jedem Push: Ticketbezug der neuen Commits, dann Lint, Typecheck und Unit-Tests im Container.
+set -eu
+root=$(git rev-parse --show-toplevel)
+zero=0000000000000000000000000000000000000000
+while read -r _lref lsha _rref rsha; do
+  [ "$lsha" = "$zero" ] && continue          # Branch wird gelöscht
+  if [ "$rsha" = "$zero" ]; then
+    range="origin/main..$lsha"               # neuer Branch
+  else
+    range="$rsha..$lsha"
+  fi
+  "$root/scripts/check-ticket-ref.sh" range "$range"
+done
+cd "$root"
+make lint typecheck test
