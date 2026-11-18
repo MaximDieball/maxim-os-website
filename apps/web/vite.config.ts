@@ -7,6 +7,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: { '/api': 'http://localhost:3000' },
+    // Im Docker-Container unter macOS kommen keine Dateisystem-Events vom Host an (#51).
+    watch: process.env.VITE_WATCH_POLLING ? { usePolling: true, interval: 300 } : undefined,
   },
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false },
 });

@@ -28,6 +28,8 @@ services:
       CI: ${CI:-}
       PORT: '3000'
       CONTENT_DIR: /app/content
+      # Vite pollt Dateien: Unter Colima/Docker Desktop fehlen sonst Änderungen vom Host (#51).
+      VITE_WATCH_POLLING: '1'
 
   # make lint/typecheck/test: einmalige Tasks im selben Image.
   tools:
