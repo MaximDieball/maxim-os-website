@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  HELP_END,
   openTerminal,
   PROMPT_TEXT,
   run,
@@ -13,7 +14,7 @@ test.describe('mobile input @input', () => {
   test('typing and enter run a command', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'help');
-    await expect(terminalOutput(page)).toContainText('tree -L 2');
+    await expect(terminalOutput(page)).toContainText(HELP_END);
   });
 
   test('history recall via quick key', async ({ page, isMobile }) => {

@@ -1,15 +1,19 @@
 import { buildApp } from './app.ts';
-import { buildAllowlist, Sandbox } from './fs/sandbox.ts';
+import { buildSnapshot } from './snapshot.ts';
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 const publicDir = process.env.PUBLIC_DIR || undefined;
 const contentDir = process.env.CONTENT_DIR || '/content';
 
-// Allowlist einmal beim Start erzeugen, nur im Speicher. Ohne Content-Ordner kein Start.
-const allowlist = await buildAllowlist(contentDir);
-const app = await buildApp({ publicDir, sandbox: new Sandbox(allowlist) });
-app.log.info({ entries: allowlist.size }, 'content allowlist ready');
+// Snapshot einmal beim Start erzeugen. Ohne Content-Ordner kein Start.
+const skipped: { path: string; reason: string }[] = [];
+const snapshot = await buildSnapshot(contentDir, {
+  onSkip: (path, reason) => skipped.push({ path, reason }),
+});
+const app = await buildApp({ publicDir, snapshot });
+app.log.info({ version: snapshot.version, skipped: skipped.length }, 'content snapshot ready');
+for (const s of skipped) app.log.warn(s, 'content entry skipped');
 
 const shutdown = async (): Promise<void> => {
   await app.close();

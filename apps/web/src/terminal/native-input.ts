@@ -1,3 +1,4 @@
+import type { IMarker } from '@xterm/xterm';
 import type { Shell, ShellOutput } from '../shell/shell.ts';
 import { sanitizeInput } from '../shell/text.ts';
 import type { LineEditor } from './editor.ts';
@@ -32,9 +33,12 @@ export function createNativeInput(
   let rows = 0;
   let last = '';
   let lastState: PromptState = { value: '', caret: 0, focused: false };
+  /** xterm-Marker am Anfang der aktuellen Prompt-Zeile (übersteht Reflow beim Resize). */
+  let marker: IMarker | undefined;
   /** Ein Command läuft gerade (Server-Anfrage): kein Prompt, Ctrl+C bricht ab. */
   let running: AbortController | undefined;
-  const prompt = (): string => promptFor(shell.cwd);
+  // Wartet die Shell auf eine Antwort (y/N), steht die Frage statt des Prompts in der Zeile.
+  const prompt = (): string => shell.inputPrompt ?? promptFor(shell.cwd);
 
   const state = (focused = document.activeElement === input): PromptState => ({
     value: input.value,
@@ -56,13 +60,20 @@ export function createNativeInput(
   };
 
   const draw = (s: PromptState = state()): void => {
-    if (running) return;
+    if (running && !shell.inputPrompt) return;
     const p = prompt();
     const r = renderPromptLine(p, s, term.cols, shown ? rows : 0);
     const key = `${term.cols}|${s.focused}|${s.caret}|${p}|${s.value}`;
     if (shown && key === last) return;
     last = key;
     lastState = s;
+    if (!shown) {
+      // Anfang der Prompt-Zeile merken (nach allen vorherigen Ausgaben), für redraw().
+      term.write('', () => {
+        marker?.dispose();
+        marker = term.registerMarker(0);
+      });
+    }
     shown = true;
     rows = r.rows;
     term.write(r.seq, () => {
@@ -93,6 +104,7 @@ export function createNativeInput(
     cols: () => view.output.cols(),
   };
   const shell = createShell(out);
+  shell.onInputRequest = () => draw();
 
   const setValue = (value: string): void => {
     input.value = value;
@@ -123,6 +135,13 @@ export function createNativeInput(
     input.focus({ preventScroll: true });
     const line = sanitizeInput(input.value);
     input.value = '';
+    if (shell.inputPrompt) {
+      // Antwort auf eine Frage der Shell (z. B. reset: y/N).
+      draw({ value: line, caret: line.length, focused: false });
+      commit();
+      shell.answer(line);
+      return;
+    }
     if (running) {
       queue.push(line);
       return;
@@ -174,12 +193,23 @@ export function createNativeInput(
       draw();
       editor.focus();
     },
+    notify(lines) {
+      out.print(lines);
+      draw();
+    },
     redraw() {
       if (!shown) return;
-      // xterm.js hat die Zeile beim Resize neu umgebrochen: Zeilen mit neuer Breite zählen.
-      rows = renderPromptLine(prompt(), lastState, term.cols, 0).rows;
-      last = '';
-      draw();
+      // Nach einem Resize hat xterm.js die Zeile evtl. neu (oder gar nicht) umgebrochen:
+      // Zum gemerkten Anfang der Prompt-Zeile zurück, statt Zeilen zu schätzen.
+      term.write('', () => {
+        const b = term.buffer.active;
+        rows =
+          marker && !marker.isDisposed
+            ? Math.max(0, b.baseY + b.cursorY - marker.line)
+            : renderPromptLine(prompt(), lastState, term.cols, 0).rows;
+        last = '';
+        draw();
+      });
     },
   };
 

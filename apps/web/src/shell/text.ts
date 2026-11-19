@@ -2,7 +2,7 @@ export const MAX_INPUT_LENGTH = 256;
 
 // C0/C1-Steuerzeichen, DEL und bidi-Overrides: dürfen nie ins Terminal gelangen.
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u061c‎‏‪-‮⁦-⁩]/g;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g;
 

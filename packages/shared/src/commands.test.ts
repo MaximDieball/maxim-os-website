@@ -19,7 +19,6 @@ describe('command registry', () => {
       expect(c.description.trim()).not.toBe('');
       expect(c.usage.trim()).not.toBe('');
       expect(c.example.trim()).not.toBe('');
-      expect(['client', 'server']).toContain(c.side);
     }
   });
 

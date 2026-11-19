@@ -50,6 +50,42 @@ describe('tokenize', () => {
   });
 });
 
+describe('tokenize: redirection', () => {
+  it('recognizes > and >> with or without spaces', () => {
+    expect(tokenize('echo hallo > a.txt')).toEqual({
+      ok: true,
+      tokens: ['echo', 'hallo'],
+      redirect: { append: false, target: 'a.txt' },
+    });
+    expect(tokenize('echo hallo>>a.txt')).toEqual({
+      ok: true,
+      tokens: ['echo', 'hallo'],
+      redirect: { append: true, target: 'a.txt' },
+    });
+    expect(tokenize('ls -l >"mein ordner.txt"')).toMatchObject({
+      tokens: ['ls', '-l'],
+      redirect: { append: false, target: 'mein ordner.txt' },
+    });
+  });
+
+  it('keeps arguments after the target like a shell', () => {
+    expect(tokenize('echo a > f.txt b')).toMatchObject({
+      tokens: ['echo', 'a', 'b'],
+      redirect: { target: 'f.txt' },
+    });
+  });
+
+  it('treats quoted > as text', () => {
+    expect(tokenize(`echo "a > b" '>>'`)).toEqual({ ok: true, tokens: ['echo', 'a > b', '>>'] });
+  });
+
+  it('rejects missing targets, double redirects and >>>', () => {
+    for (const line of ['echo a >', 'echo a > ', 'echo a > b > c', 'echo a >>> b', 'echo > >> b']) {
+      expect(tokenize(line).ok, line).toBe(false);
+    }
+  });
+});
+
 describe('parseArgs', () => {
   it('accepts allowed short flags, also combined', () => {
     expect(parseArgs(spec('ls'), ['-l'])).toEqual({ ok: true, flags: { l: true }, operands: [] });
@@ -108,6 +144,13 @@ describe('parseArgs', () => {
 
   it('rejects a lone dash', () => {
     expect(parseArgs(spec('cat'), ['-']).ok).toBe(false);
+  });
+
+  it('passes raw arguments through for echo', () => {
+    expect(parseArgs(spec('echo'), ['-n', '--x', 'hallo'])).toMatchObject({
+      ok: true,
+      operands: ['-n', '--x', 'hallo'],
+    });
   });
 
   it('cannot be tricked by prototype keys', () => {

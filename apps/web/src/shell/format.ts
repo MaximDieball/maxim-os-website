@@ -1,13 +1,31 @@
-import type { DirEntry, TreeNode } from '@maxim-os/shared';
 import { style } from './text.ts';
+
+export type EntryType = 'dir' | 'file';
+
+/** Eintrag für ls. */
+export interface DirEntry {
+  name: string;
+  type: EntryType;
+  /** Größe in Bytes (Dateien). */
+  size: number;
+  /** Letzte Änderung, ISO-8601. */
+  mtime: string;
+}
+
+/** Knoten für tree. */
+export interface TreeNode {
+  name: string;
+  type: EntryType;
+  children?: TreeNode[];
+}
 
 /** Ab dieser Breite gibt es die ausführlichen Varianten. */
 const NARROW_COLS = 48;
 
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c‎‏‪-‮⁦-⁩]/g;
 
-/** Namen und Texte vom Server nie ungeprüft ins Terminal schreiben. */
+/** Namen, Inhalte und Eingaben nie ungeprüft ins Terminal schreiben (Terminal-Injection). */
 export const clean = (s: string): string => s.replace(CONTROL, '');
 
 export function formatSize(bytes: number): string {
@@ -41,7 +59,7 @@ export function formatLs(entries: readonly DirEntry[], long: boolean, cols: numb
     return entries.map((e, i) => {
       const size = sizes[i]!.padStart(sizeWidth);
       if (narrow) return `${e.type === 'dir' ? 'd' : '-'} ${size}  ${colorName(e)}`;
-      const mode = e.type === 'dir' ? 'dr-xr-xr-x' : '-r--r--r--';
+      const mode = e.type === 'dir' ? 'drwxr-xr-x' : '-rw-r--r--';
       return `${mode}  ${size}  ${formatDate(e.mtime)}  ${colorName(e)}`;
     });
   }

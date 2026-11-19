@@ -2,24 +2,11 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
-import {
-  CommandRequestSchema,
-  CompleteRequestSchema,
-  findCommand,
-  parseArgs,
-  type CommandResult,
-  type CompleteResponse,
-  type ErrorResponse,
-  type HealthResponse,
-} from '@maxim-os/shared';
-import { completePath, SERVER_HANDLERS } from './fs/commands.ts';
-import type { Sandbox } from './fs/sandbox.ts';
+import type { ErrorResponse, HealthResponse, Snapshot } from '@maxim-os/shared';
 
 export interface RateLimitOptions {
-  /** Anfragen pro Client (IP) und Zeitfenster. */
-  perClient: number;
-  /** Anfragen insgesamt pro Zeitfenster (der Tunnel reicht evtl. keine echte IP durch). */
-  global: number;
+  /** Anfragen an /api/* insgesamt pro Zeitfenster. */
+  max: number;
   windowMs: number;
 }
 
@@ -27,13 +14,13 @@ export interface AppOptions {
   logger?: boolean;
   /** Ordner mit dem gebauten Frontend. Ohne Angabe wird nichts statisch ausgeliefert. */
   publicDir?: string;
-  /** Sandbox für das simulierte Dateisystem. Ohne Angabe keine FS-Commands. */
-  sandbox?: Sandbox;
+  /** Snapshot des Content-Ordners für GET /api/fs. */
+  snapshot?: Snapshot;
   rateLimit?: RateLimitOptions;
 }
 
 const BODY_LIMIT_BYTES = 4 * 1024;
-const DEFAULT_RATE_LIMIT: RateLimitOptions = { perClient: 120, global: 1200, windowMs: 60_000 };
+const DEFAULT_RATE_LIMIT: RateLimitOptions = { max: 1200, windowMs: 60_000 };
 const TOO_MANY = 'Zu viele Anfragen. Bitte kurz warten.';
 
 class HttpError extends Error {
@@ -44,6 +31,10 @@ class HttpError extends Error {
   }
 }
 
+/**
+ * Der Server ist bewusst klein (CLAUDE.md, Architektur): Er liefert das Frontend,
+ * den Snapshot des Content-Ordners und Health. Er nimmt keine Pfade oder Commands an.
+ */
 export async function buildApp(options: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options.logger ?? true,
@@ -72,7 +63,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     void reply.status(404).send(body);
   });
 
-  // Sicherheits-Header inkl. CSP. xterm.js setzt Inline-Styles, Skripte nur vom eigenen Origin.
+  // Sicherheits-Header inkl. CSP. xterm.js setzt Inline-Styles; GitHub-API für den Steckbrief.
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: {
       useDefaults: false,
@@ -82,7 +73,7 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
         fontSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://api.github.com'],
         objectSrc: ["'none'"],
         baseUri: ["'none'"],
         formAction: ["'self'"],
@@ -92,63 +83,28 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
     referrerPolicy: { policy: 'no-referrer' },
   });
 
-  // Rate-Limits: pro Client (Plugin) und global (eigener Zähler).
+  // Ein globales Limit für /api/* reicht (der Tunnel reicht evtl. keine echte IP durch).
   const limits = options.rateLimit ?? DEFAULT_RATE_LIMIT;
   await app.register(fastifyRateLimit, {
     global: false,
-    max: limits.perClient,
+    max: limits.max,
     timeWindow: limits.windowMs,
+    keyGenerator: () => 'global',
     errorResponseBuilder: () => new HttpError(429, TOO_MANY),
   });
-  let windowStart = Date.now();
-  let globalCount = 0;
-  const globalLimit = async (): Promise<void> => {
-    const now = Date.now();
-    if (now - windowStart >= limits.windowMs) {
-      windowStart = now;
-      globalCount = 0;
-    }
-    if (++globalCount > limits.global) throw new HttpError(429, TOO_MANY);
-  };
-  // preHandler läuft nach dem Pro-Client-Limit (onRequest): abgewiesene Anfragen zählen nicht global.
-  const limited = { config: { rateLimit: {} }, preHandler: globalLimit };
+  const limited = { config: { rateLimit: {} } };
 
   app.get('/api/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
 
-  const sandbox = options.sandbox;
-  if (sandbox) {
-    app.post('/api/command', limited, async (request): Promise<CommandResult> => {
-      const parsed = CommandRequestSchema.safeParse(request.body);
-      if (!parsed.success) throw new HttpError(400, 'invalid body');
-      const { cwd, name, args } = parsed.data;
-
-      // Nur serverseitige Commands aus der Registry (Allowlist).
-      const spec = findCommand(name);
-      const handler = spec?.side === 'server' ? SERVER_HANDLERS.get(spec.name) : undefined;
-      if (!spec || !handler) throw new HttpError(400, 'unknown command');
-
-      const argv = parseArgs(spec, args);
-      if (!argv.ok) return { kind: 'error', message: argv.error };
-
-      // Das Verzeichnis kommt vom Client und wird bei jedem Request neu geprüft.
-      const dir = await sandbox.resolveCwd(cwd);
-      if (!dir.ok) {
-        return {
-          kind: 'error',
-          message: `Aktueller Ordner ungültig: ${dir.error}`,
-          resetCwd: true,
-        };
-      }
-
-      return handler({ sandbox, cwd: dir.path, flags: argv.flags, operands: argv.operands });
-    });
-
-    app.post('/api/complete', limited, async (request): Promise<CompleteResponse> => {
-      const parsed = CompleteRequestSchema.safeParse(request.body);
-      if (!parsed.success) throw new HttpError(400, 'invalid body');
-      const dir = await sandbox.resolveCwd(parsed.data.cwd);
-      if (!dir.ok) return { candidates: [] };
-      return { candidates: await completePath(sandbox, dir.path, parsed.data.partial) };
+  const snapshot = options.snapshot;
+  if (snapshot) {
+    // Einmal serialisieren; der Browser fragt mit If-None-Match nach.
+    const body = JSON.stringify(snapshot);
+    const etag = `"${snapshot.version}"`;
+    app.get('/api/fs', limited, async (request, reply) => {
+      void reply.header('etag', etag).header('cache-control', 'no-cache');
+      if (request.headers['if-none-match'] === etag) return reply.status(304).send();
+      return reply.type('application/json; charset=utf-8').send(body);
     });
   }
 
