@@ -23,7 +23,7 @@ export interface TreeNode {
 const NARROW_COLS = 48;
 
 // eslint-disable-next-line no-control-regex
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g;
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c‎‏‪-‮⁦-⁩]/g;
 
 /** Namen, Inhalte und Eingaben nie ungeprüft ins Terminal schreiben (Terminal-Injection). */
 export const clean = (s: string): string => s.replace(CONTROL, '');

@@ -14,9 +14,9 @@ export const LIMITS = {
   name: 32,
 } as const;
 
-// C0/C1-Steuerzeichen, DEL und bidi-Overrides.
+// C0/C1-Steuerzeichen, DEL, Bidi-Marks (inkl. U+061C) und Bidi-Overrides/Isolates.
 // eslint-disable-next-line no-control-regex
-export const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/;
+export const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u061c‎‏‪-‮⁦-⁩]/;
 
 const CONTROL_CHARS_GLOBAL = new RegExp(CONTROL_CHARS.source, 'g');
 

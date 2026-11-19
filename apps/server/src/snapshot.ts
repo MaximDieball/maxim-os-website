@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   isValidName,
@@ -49,14 +49,20 @@ export async function buildSnapshot(
 
   const walk = async (real: string, shown: string, depth: number): Promise<FsNode[]> => {
     const children: FsNode[] = [];
-    const dirents = (await readdir(real, { withFileTypes: true })).sort((a, b) =>
-      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-    );
-    for (const dirent of dirents) {
-      const path = `${shown}/${dirent.name}`;
+    // Namen als Bytes lesen: Node würde ungültiges UTF-8 sonst stillschweigend ersetzen.
+    const raw = await readdir(real, { withFileTypes: true, encoding: 'buffer' });
+    const dirents: { dirent: (typeof raw)[number]; name: string }[] = [];
+    for (const d of raw) {
+      const decoded = asText(d.name);
+      if (decoded === undefined) skip(shown, 'ungültiger Name');
+      else dirents.push({ dirent: d, name: decoded });
+    }
+    dirents.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const { dirent, name } of dirents) {
+      const path = `${shown}/${name}`;
       // Symlinks werden weder verfolgt noch aufgelistet; nur Ordner und reguläre Dateien.
       if (dirent.isSymbolicLink() || !(dirent.isDirectory() || dirent.isFile())) continue;
-      if (!isValidName(dirent.name)) {
+      if (!isValidName(name)) {
         skip(shown, 'ungültiger Name');
         continue;
       }
@@ -64,15 +70,23 @@ export async function buildSnapshot(
         skip(path, 'zu viele Einträge');
         break;
       }
-      const full = join(real, dirent.name);
-      const info = await stat(full);
+      const full = join(real, name);
+      // Fehler bei einem einzelnen Eintrag (z. B. EACCES) überspringen, nicht den Start abbrechen.
+      let info: Awaited<ReturnType<typeof lstat>>;
+      try {
+        info = await lstat(full);
+      } catch {
+        skip(path, 'nicht lesbar');
+        continue;
+      }
+      if (!info.isDirectory() && !info.isFile()) continue;
       const mtime = info.mtime.toISOString();
 
       if (dirent.isDirectory()) {
         entries++;
         children.push({
           type: 'dir',
-          name: dirent.name,
+          name,
           mtime,
           children: depth < limits.depth ? await walk(full, path, depth + 1) : [],
         });
@@ -84,7 +98,13 @@ export async function buildSnapshot(
         skip(path, 'Datei zu groß');
         continue;
       }
-      const bytes = await readFile(full);
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(full);
+      } catch {
+        skip(path, 'nicht lesbar');
+        continue;
+      }
       const text = asText(bytes);
       if (text !== undefined && totalBytes + bytes.length > limits.totalBytes) {
         skip(path, 'Snapshot zu groß');
@@ -92,10 +112,10 @@ export async function buildSnapshot(
       }
       entries++;
       if (text === undefined) {
-        children.push({ type: 'file', name: dirent.name, mtime, size: bytes.length, binary: true });
+        children.push({ type: 'file', name, mtime, size: bytes.length, binary: true });
       } else {
         totalBytes += bytes.length;
-        children.push({ type: 'file', name: dirent.name, mtime, size: bytes.length, text });
+        children.push({ type: 'file', name, mtime, size: bytes.length, text });
       }
     }
     return children;
