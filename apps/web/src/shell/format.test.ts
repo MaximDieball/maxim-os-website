@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { DirEntry, TreeNode } from '@maxim-os/shared';
-import { formatCat, formatLs, formatSize, formatTree } from './format.ts';
+import {
+  formatCat,
+  formatLs,
+  formatSize,
+  formatTree,
+  type DirEntry,
+  type TreeNode,
+} from './format.ts';
 import { stripAnsi } from './text.ts';
 
 const plain = (lines: string[]) => lines.map(stripAnsi);
@@ -48,13 +54,13 @@ describe('formatLs', () => {
   it('prints a long listing with read-only permissions, size and date', () => {
     const lines = plain(formatLs(entries, true, 100));
     expect(lines).toHaveLength(entries.length);
-    expect(lines[0]).toMatch(/^-r--r--r-- +10 +\d\d\.\d\d\.2026 \d\d:\d\d +README\.txt$/);
-    expect(lines[1]).toMatch(/^dr-xr-xr-x/);
+    expect(lines[0]).toMatch(/^-rw-r--r-- +10 +\d\d\.\d\d\.2026 \d\d:\d\d +README\.txt$/);
+    expect(lines[1]).toMatch(/^drwxr-xr-x/);
   });
 
   it('drops the permissions in the narrow long listing', () => {
     const lines = plain(formatLs(entries, true, 40));
-    expect(lines[0]).not.toContain('r--');
+    expect(lines[0]).not.toContain('rw-');
     for (const l of lines) expect(l.length).toBeLessThanOrEqual(40);
     expect(lines[0]).toContain('README.txt');
   });

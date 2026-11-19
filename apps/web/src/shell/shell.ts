@@ -1,9 +1,18 @@
-import { COMMANDS, findCommand, parseArgs, tokenize, type CommandResult } from '@maxim-os/shared';
-import { ApiError, type ServerApi } from './api.ts';
+import {
+  COMMANDS,
+  findCommand,
+  parseArgs,
+  printable,
+  tokenize,
+  type CommandSpec,
+  type FlagValues,
+} from '@maxim-os/shared';
+import { VfsError } from '../vfs/vfs.ts';
+import type { Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS } from './commands.ts';
-import { clean, formatCat, formatLs, formatTree } from './format.ts';
+import { clean } from './format.ts';
 import { History } from './history.ts';
-import { sanitizeInput, style, truncate } from './text.ts';
+import { sanitizeInput, stripAnsi, style, truncate } from './text.ts';
 
 /** Ausgabekanal, den das Terminal (xterm.js) bereitstellt. */
 export interface ShellOutput {
@@ -15,102 +24,176 @@ export interface ShellOutput {
 }
 
 export interface CommandContext {
+  /** Normale Ausgabe (bei `>`/`>>` landet sie in der Datei). */
   out: ShellOutput;
+  spec: CommandSpec;
   args: string[];
+  flags: FlagValues;
+  operands: string[];
   shell: Shell;
+  /** Arbeitskopie; undefined, wenn der Snapshot nicht geladen werden konnte. */
+  ws: Workspace | undefined;
+  signal: AbortSignal | undefined;
 }
 
-export type ClientHandler = (ctx: CommandContext) => void;
+export type ClientHandler = (ctx: CommandContext) => void | Promise<void>;
 
 const MAX_NAME_IN_ERROR = 40;
+/** Breite für umgeleitete Ausgaben (Datei statt Bildschirm): immer die breite Variante. */
+const FILE_COLS = 100;
 
-const isAbort = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === 'AbortError';
+export const FS_UNAVAILABLE = 'Dateisystem nicht verfügbar (Inhalte konnten nicht geladen werden).';
 
 export class Shell {
   readonly history = new History();
-  /** Aktuelles simuliertes Verzeichnis. Der Server prüft es bei jedem Request neu. */
+  /** Aktuelles simuliertes Verzeichnis (nur im Browser). */
   cwd = '/';
+  /** Gesetzt, solange die Shell auf eine Antwort wartet (z. B. y/N). Wird statt des Prompts gezeigt. */
+  inputPrompt: string | undefined;
+  /** Wird aufgerufen, wenn die Shell eine Antwort erwartet (Editor zeichnet die Frage). */
+  onInputRequest: (() => void) | undefined;
 
   private readonly out: ShellOutput;
-  private readonly api: ServerApi | undefined;
+  private ws: Workspace | undefined;
+  private readonly ready: Promise<void>;
+  private pending: ((answer: string | undefined) => void) | undefined;
+  private warnedSave = false;
 
-  constructor(out: ShellOutput, api?: ServerApi) {
+  constructor(out: ShellOutput, workspace?: Workspace | Promise<Workspace | undefined>) {
     this.out = out;
-    this.api = api;
+    this.ready = Promise.resolve(workspace).then(
+      (ws) => {
+        this.ws = ws;
+      },
+      () => {
+        this.ws = undefined;
+      },
+    );
   }
 
-  private error(message: string): void {
-    // Meldungen können Teile der Eingabe bzw. Serverantwort enthalten: nie ungefiltert ausgeben.
+  /** Fehlermeldung in Rot. Meldungen können Eingaben enthalten: nie ungefiltert ausgeben. */
+  error(message: string): void {
     this.out.print([style.red(clean(message))]);
   }
 
-  /** Führt eine Eingabezeile aus. `signal` bricht laufende Server-Anfragen ab (Ctrl+C). */
+  /** Fehler eines Commands zu einem Pfad, Format wie in einer Shell: `rm: x: Meldung`. */
+  fsError(command: string, operand: string, error: unknown): void {
+    const message = error instanceof VfsError ? error.message : 'Fehler';
+    this.error(`${command}: ${printable(operand, 60)}: ${message}`);
+  }
+
+  /** Stellt eine Ja/Nein-Frage. Standard ist Nein; Abbruch (Ctrl+C) ist Nein. */
+  async confirm(question: string, signal?: AbortSignal): Promise<boolean> {
+    const answer = await this.ask(`${question} (y/N) `, signal);
+    return answer !== undefined && /^(y|yes|j|ja)$/i.test(answer.trim());
+  }
+
+  private ask(prompt: string, signal?: AbortSignal): Promise<string | undefined> {
+    return new Promise((resolve) => {
+      if (signal?.aborted) return resolve(undefined);
+      const finish = (answer: string | undefined): void => {
+        this.pending = undefined;
+        this.inputPrompt = undefined;
+        signal?.removeEventListener('abort', onAbort);
+        resolve(answer);
+      };
+      const onAbort = (): void => finish(undefined);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      this.pending = finish;
+      this.inputPrompt = prompt;
+      this.onInputRequest?.();
+    });
+  }
+
+  /** Gibt eine eingegebene Zeile als Antwort weiter. `false`, wenn keine Frage offen ist. */
+  answer(line: string): boolean {
+    if (!this.pending) return false;
+    this.pending(line);
+    return true;
+  }
+
+  /** Führt eine Eingabezeile aus. `signal` bricht laufende Commands ab (Ctrl+C). */
   async execute(rawLine: string, signal?: AbortSignal): Promise<void> {
     const line = sanitizeInput(rawLine).trim();
     this.history.push(line);
     if (!line) return;
 
-    const tokens = tokenize(line);
-    if (!tokens.ok) return this.error(tokens.error);
-    const [name = '', ...args] = tokens.tokens;
+    const parsed = tokenize(line);
+    if (!parsed.ok) return this.error(parsed.error);
+    const [name = '', ...args] = parsed.tokens;
 
     const spec = findCommand(name);
-    if (!spec) {
+    const handler =
+      spec && Object.hasOwn(CLIENT_HANDLERS, spec.name) ? CLIENT_HANDLERS[spec.name] : undefined;
+    if (!spec || !handler) {
       this.out.print([
-        `${style.red('command not found:')} ${truncate(name, MAX_NAME_IN_ERROR)}. Tippe 'help'.`,
+        `${style.red('command not found:')} ${truncate(printable(name, 200), MAX_NAME_IN_ERROR)}. Tippe 'help'.`,
       ]);
       return;
     }
-    // Allowlist schon im Client prüfen; der Server prüft trotzdem selbst.
     const argv = parseArgs(spec, args);
     if (!argv.ok) return this.error(argv.error);
-
-    if (spec.side === 'client') {
-      const handler = Object.hasOwn(CLIENT_HANDLERS, spec.name)
-        ? CLIENT_HANDLERS[spec.name]
-        : undefined;
-      if (!handler) return this.error(`${spec.name}: nicht verfügbar`);
-      return handler({ out: this.out, args, shell: this });
+    if (parsed.redirect && !spec.redirect) {
+      return this.error(`${spec.name}: Ausgabe kann nicht umgeleitet werden`);
     }
 
-    if (!this.api) return this.error(`${spec.name}: nicht verfügbar`);
-    try {
-      const result = await this.api.command({ cwd: this.cwd, name: spec.name, args }, signal);
-      this.render(result);
-    } catch (error) {
-      if (isAbort(error) || signal?.aborted) return;
-      this.error(`${spec.name}: ${error instanceof ApiError ? error.message : 'Fehler.'}`);
+    await this.ready;
+    const ws = this.ws;
+    const captured: string[] = [];
+    const out: ShellOutput = parsed.redirect
+      ? { print: (l) => captured.push(...l), clear: () => {}, cols: () => FILE_COLS }
+      : this.out;
+
+    await handler({
+      out,
+      spec,
+      args,
+      flags: argv.flags,
+      operands: argv.operands,
+      shell: this,
+      ws,
+      signal,
+    });
+
+    let wrote = spec.writes === true;
+    if (parsed.redirect) {
+      if (!ws) return this.error(FS_UNAVAILABLE);
+      const target = parsed.redirect.target;
+      try {
+        const text = captured.length ? `${captured.map(stripAnsi).join('\n')}\n` : '';
+        ws.fs.writeText(ws.fs.resolve(this.cwd, target), text, {
+          append: parsed.redirect.append,
+        });
+        wrote = true;
+      } catch (error) {
+        this.fsError(spec.name, target, error);
+      }
+    }
+
+    if (ws) {
+      // Wurde der aktuelle Ordner gelöscht oder verschoben: zurück zur Wurzel.
+      if (ws.fs.get(this.cwd)?.type !== 'dir') this.cwd = '/';
+      if (wrote && !ws.save() && !this.warnedSave) {
+        this.warnedSave = true;
+        this.out.print([
+          style.yellow('Hinweis: Änderungen können in diesem Browser nicht gespeichert werden.'),
+        ]);
+      }
     }
   }
 
-  private render(result: CommandResult): void {
-    const cols = this.out.cols();
-    switch (result.kind) {
-      case 'ls':
-        return this.out.print(formatLs(result.entries, result.long, cols));
-      case 'cd':
-        this.cwd = result.cwd;
-        return;
-      case 'pwd':
-        return this.out.print([result.cwd]);
-      case 'cat':
-        return this.out.print(formatCat(result.text));
-      case 'tree':
-        return this.out.print(
-          formatTree(result.root, result.dirs, result.files, result.truncated, cols),
-        );
-      case 'error':
-        if (result.resetCwd) this.cwd = '/';
-        return this.error(result.message);
-    }
+  /** Ersetzt die Arbeitskopie durch das Original (reset). */
+  resetWorkspace(): void {
+    this.ws?.reset();
+    this.cwd = '/';
   }
 
   /**
-   * Tab-Completion: erstes Wort aus der Registry, Pfad-Argumente über den Server.
-   * Gibt die neue Eingabe zurück; bei mehreren Treffern werden die Kandidaten ausgegeben.
+   * Tab-Completion: erstes Wort aus der Registry, Pfad-Argumente aus dem lokalen
+   * Dateisystem. Gibt die neue Eingabe zurück; bei mehreren Treffern werden die
+   * Kandidaten ausgegeben.
    */
-  async complete(input: string, signal?: AbortSignal): Promise<string> {
+  async complete(input: string): Promise<string> {
     if (!/\s/.test(input)) {
       const names = COMMANDS.flatMap((c) => [c.name, ...c.aliases])
         .filter((n) => n.startsWith(input))
@@ -119,19 +202,29 @@ export class Shell {
     }
 
     const spec = findCommand(input.trimStart().split(/\s+/)[0] ?? '');
-    if (!spec?.pathOperands || !this.api) return input;
+    await this.ready;
+    const ws = this.ws;
+    if (!spec?.pathOperands || !ws) return input;
     const partial = /\s$/.test(input) ? '' : (input.split(/\s+/).at(-1) ?? '');
-    if (/["']/.test(partial) || partial.startsWith('-')) return input;
+    if (/["'>]/.test(partial) || partial.startsWith('-')) return input;
+
+    const slash = partial.lastIndexOf('/');
+    const dirPart = slash >= 0 ? partial.slice(0, slash + 1) : '';
+    const base = slash >= 0 ? partial.slice(slash + 1) : partial;
     let candidates: string[];
     try {
-      candidates = await this.api.complete({ cwd: this.cwd, partial }, signal);
+      const dir = ws.fs.resolve(this.cwd, dirPart === '' ? '.' : dirPart);
+      candidates = ws.fs
+        .list(dir)
+        .filter((n) => n.name.startsWith(base) && (base.startsWith('.') || !n.name.startsWith('.')))
+        .map((n) => `${dirPart}${n.name}${n.type === 'dir' ? '/' : ''}`);
     } catch {
       return input;
     }
     const head = input.slice(0, input.length - partial.length);
-    const basename = (c: string) =>
+    const label = (c: string): string =>
       c.replace(/\/$/, '').split('/').at(-1)! + (c.endsWith('/') ? '/' : '');
-    return this.pick(input, head, candidates, basename, (c) => (c.endsWith('/') ? '' : ' '));
+    return this.pick(input, head, candidates, label, (c) => (c.endsWith('/') ? '' : ' '));
   }
 
   private pick(
@@ -146,7 +239,7 @@ export class Shell {
       const only = candidates[0]!;
       return head + only + (typeof suffix === 'string' ? suffix : suffix(only));
     }
-    this.out.print([candidates.map(label).join('  ')]);
+    this.out.print([candidates.map((c) => clean(label(c))).join('  ')]);
     const prefix = commonPrefix(candidates);
     return prefix.length > input.length - head.length ? head + prefix : input;
   }

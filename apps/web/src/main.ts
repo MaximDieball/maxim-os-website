@@ -3,14 +3,15 @@ import '@fontsource/jetbrains-mono/700.css';
 import './styles.css';
 import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
-import { createServerApi } from './shell/api.ts';
-import { Shell } from './shell/shell.ts';
+import { FS_UNAVAILABLE, Shell } from './shell/shell.ts';
+import { style } from './shell/text.ts';
 import { createLiveRegion } from './terminal/live.ts';
 import { createNativeInput } from './terminal/native-input.ts';
 import { bindQuickKeys } from './terminal/quickkeys.ts';
 import { createTerminal } from './terminal/term.ts';
 import { bindTouchScroll } from './terminal/touch-scroll.ts';
 import { trackVisualViewport } from './terminal/viewport.ts';
+import { loadWorkspace } from './vfs/load.ts';
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -24,6 +25,9 @@ async function boot(): Promise<void> {
   const form = byId<HTMLFormElement>('prompt');
   const input = byId<HTMLInputElement>('cmd');
 
+  // Snapshot parallel zur Animation laden; die Shell wartet bei Bedarf darauf.
+  const workspace = loadWorkspace();
+
   const matrix = runMatrix(byId<HTMLCanvasElement>('matrix'), {
     skip: shouldSkipBoot(location.search),
   });
@@ -35,7 +39,7 @@ async function boot(): Promise<void> {
   ]);
 
   const view = createTerminal(termEl, createLiveRegion(byId('live')));
-  const editor = createNativeInput(form, input, view, (out) => new Shell(out, createServerApi()));
+  const editor = createNativeInput(form, input, view, (out) => new Shell(out, workspace));
 
   trackVisualViewport(app, () => {
     view.fit();
@@ -79,6 +83,10 @@ async function boot(): Promise<void> {
   view.output.print(startscreenLines(view.term.cols));
   editor.start();
   document.documentElement.dataset.ready = 'true';
+  void workspace.then((ws) => {
+    if (!ws) editor.notify([style.yellow(FS_UNAVAILABLE)]);
+    else if (ws.notice) editor.notify([style.yellow(ws.notice)]);
+  });
   await matrix;
   document.documentElement.dataset.booted = 'true';
   editor.focus();
