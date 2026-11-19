@@ -1,22 +1,24 @@
-# Website Prompt v3: MAXIM OS
+# Website Prompt v4: MAXIM OS
 
-Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln zu Techstack, Docker, Sicherheit und Entwicklung. Dieser Prompt beschreibt die Features und die Arbeitsweise.
+Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln zu Techstack, Architektur, Docker, Sicherheit und Entwicklung. Dieses Dokument beschreibt die Features und die Arbeitsweise.
+
+> **v4 (Client-first):** Gegenüber v3 läuft fast alles im Browser. Der Server liefert nur noch einen Snapshot des Content-Ordners. Alle Commands arbeiten auf einer Kopie im Browser, deshalb gibt es jetzt auch bearbeitende Commands. Abschnitt 2 beschreibt das Modell, Abschnitt 5 was an Sicherheitsmaßnahmen dadurch entfällt.
 
 ---
 
 ## 0. Ausgangslage und Arbeitsweise
 
-- Das GitHub-Repo **`maxim-os-website`** existiert bereits, ist aber leer. Nutze es (klonen, nicht neu anlegen). Lege darin eine sinnvolle Struktur an.
-- **Starte im Plan-Mode.** Lege mir zuerst einen Plan vor: Projektstruktur, Docker-Setup und Meilensteine mit Akzeptanzkriterien. Beginne erst nach meiner Freigabe mit Code.
+- Repo **`maxim-os-website`** mit Monorepo, Docker-Setup, CI und Kanban-Board ist vorhanden.
+- **Stand:** `mvp-1` (Skeleton) ist fertig. `mvp-2` (Dateisystem in der v3-Variante: Commands auf dem Server mit Pfad-Validator und Allowlist) ist gemergt und durch ein Security-Review gegangen. Es wird als historischer Stand abgeschlossen (Tag `mvp-2`) und in Meilenstein 3 auf das Client-Modell umgebaut.
 - **Agile Herangehensweise:** Arbeite in den Meilensteinen aus Abschnitt 1. Nach jedem Meilenstein gilt:
   1. Alle Tests sind grün, die Pipeline-Checks laufen durch.
-  2. Es gibt einen Commit (und ein Tag `mvp-N`), der Push erfolgt nur bei grüner Pipeline.
-  3. Du gibst eine kurze Zusammenfassung (was geht jetzt, wie starte ich es, was ist als Nächstes dran).
+  2. Es gibt einen Merge nach `main` und ein Tag `mvp-N`. Gepusht wird nur bei grüner Pipeline.
+  3. Du gibst eine kurze Zusammenfassung (was geht jetzt, wie starte ich es, was ist als Nächstes dran, welche `unplanned`-Tickets sind entstanden).
   4. **Du hältst an und wartest auf mein Feedback**, bevor du den nächsten Meilenstein beginnst. Jeder Meilenstein ergibt ein lauffähiges MVP.
 - **Subagents:**
-  - Meilenstein 1 und 2 baust du selbst und sequenziell. Das Fundament (Typen, Command-Registry, Pfad-Validator) muss konsistent und sicher sein.
-  - Ab Meilenstein 3 darfst du unabhängige Teile parallel an Subagents geben (z. B. Snake, Minecraft-Status, ASCII-Generator, CI-Feinschliff). Vorher definierst du die Schnittstellen (Typen im `shared`-Paket, Registry-Eintrag), damit nichts kollidiert.
-  - Nach Meilenstein 2 startest du einen **separaten Review-Subagent**, der den Pfad-Validator und die FS-Commands gezielt angreift (Traversal, Symlinks, Encoding, Null-Bytes, überlange Pfade, unerlaubte Flags). Er hat den Code nicht geschrieben. Gefundene Lücken werden zuerst als Test festgehalten, dann behoben.
+  - Meilenstein 3 (Umbau) baust du selbst und sequenziell. Das Fundament (virtuelles Dateisystem, Snapshot-Format, Command-Registry) muss konsistent sein.
+  - Ab Meilenstein 4 darfst du unabhängige Teile parallel an Subagents geben (z. B. Snake, Minecraft-Status, ASCII-Generator). Vorher definierst du die Schnittstellen (Typen im `shared`-Paket, Registry-Eintrag), damit nichts kollidiert.
+  - Am Ende von Meilenstein 3 prüft ein **separater Review-Subagent**, der den Code nicht geschrieben hat, kurz den Snapshot-Generator (Symlinks, Limits, Hostpfade) und die Terminal-Ausgabe (Escape-Sequenzen aus Dateinamen und Inhalten). Funde werden zuerst als Test festgehalten, dann behoben.
 - Alles (Entwicklung, Tests, UI-Tests, Ausführen) läuft **in Docker-Containern**, siehe `CLAUDE.md`.
 - **Ohne Ticket wird nichts gemacht.** Die Ticket-Regel aus der `CLAUDE.md` gilt für dich und alle Subagents, siehe Abschnitt 7a.
 
@@ -24,44 +26,80 @@ Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln 
 
 ## 1. Meilensteine
 
-1. **Skeleton:** Monorepo, Docker-Setup, CI-Pipeline, Startup-Animation, Startscreen, Command-Registry, `help`, `clear`, Fehlermeldung für unbekannte Commands, **mobiles Terminal-Layout inklusive Eingabe-Spike** (siehe Abschnitt 4a). Ab hier wird jeder Meilenstein auch mobil geprüft.
-2. **Dateisystem:** Content-Ordner, Allowlist-Generator, Pfad-Validator, `ls`, `cd`, `pwd`, `cat`, `tree`, Rate-Limiting und Eingabe-Limits. Danach der Review-Subagent.
-3. **Steckbrief:** `steckbrief` mit GitHub-Daten und vorgerendertem ASCII-Bild, dazu `about`, `whoami`, `projects`.
-4. **Spiele und Links:** `snake` und `watchthis`.
-5. **Minecraft:** `minecraft`-Übersicht mit Status, Spielern und Ping.
-6. **Release-Reife:** Production-Image, `docker-compose.prod.yml`, Härtung, README mit Übergabe-Anleitung (siehe Abschnitt 9).
+1. **Skeleton** ✅: Monorepo, Docker-Setup, CI-Pipeline, Startup-Animation, Startscreen, Command-Registry, `help`, `clear`, Fehlermeldung für unbekannte Commands, mobiles Terminal-Layout inklusive Eingabe-Spike.
+2. **Dateisystem (v3, Server)** ✅: Content-Ordner, Allowlist, Pfad-Validator, `ls`, `cd`, `pwd`, `cat`, `tree` auf dem Server, Rate-Limiting, Security-Review. Wird in Meilenstein 3 ersetzt.
+3. **Umbau: Client-Dateisystem:** Snapshot-Endpunkt `GET /api/fs`, virtuelles Dateisystem im Browser, lesende Commands im Client, bearbeitende Commands (`mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp`, `echo` mit `>`/`>>`), Persistenz im `localStorage`, `reset`. Rückbau von Pfad-Validator, `/api/command`, `/api/complete` und Server-Commands. Kurzes Review (siehe Abschnitt 0).
+4. **Steckbrief und Design:** Design-Auswahl (Schrift und Theme), neues Logo, `steckbrief` mit GitHub-Daten und vorgerendertem ASCII-Bild, dazu `about`, `whoami`, `projects`, `history`.
+5. **Spiele und Links:** `snake` und `watchthis`.
+6. **Minecraft:** `minecraft`-Übersicht mit Status, Spielern und Ping.
+7. **Release-Reife:** Production-Image, `docker-compose.prod.yml`, Härtung, mobiler Feinschliff, README mit Übergabe-Anleitung (siehe Abschnitt 9).
+
+Die bestehenden Tickets der früheren Meilensteine `mvp-3` bis `mvp-6` werden auf `mvp-4` bis `mvp-7` umgehängt.
 
 ---
 
-## 2. Grundkonzept und Sicherheitsmodell
+## 2. Architektur und Sicherheitsmodell
 
-Auf dem Server liegt eine echte Ordnerstruktur (der "Content-Ordner"). Die Website simuliert darauf ein Dateisystem. Der User sieht sein aktuelles Verzeichnis, kann aber nie aus dem Content-Ordner ausbrechen.
+```
+Browser                                              Server (Fastify)
+┌──────────────────────────────────────────┐         ┌───────────────────────────────┐
+│ Terminal (xterm.js) + Command-Registry    │  GET    │ Snapshot-Generator            │
+│ Virtuelles Dateisystem (im Speicher)      │ ──────► │  liest content/ beim Start    │
+│  ← Snapshot (Original)                    │ /api/fs │  (read-only, ohne Symlinks)   │
+│  ← lokale Änderungen (localStorage)       │         │ statisches Frontend           │
+│ Alle Commands laufen hier                 │         │ /api/health, später Minecraft │
+└──────────────────────────────────────────┘         └───────────────────────────────┘
+```
 
-Zentrale Regeln:
+### Grundsätze
 
-1. Der User führt **keine echten Commands** aus. Es gibt eine feste Menge erlaubter Commands.
-2. **Es werden niemals Prozesse gestartet.** Kein `exec`, `spawn`, `child_process`, keine Shell. Die Dateisystem-Commands werden im Server **selbst implementiert**, mit `fs.readdir`, `fs.readFile` und `fs.stat`. Es werden keine Parameter an echte Programme durchgereicht.
-3. Der User kann das Dateisystem **nur ansehen**, nie verändern.
-4. Unbekannte oder nicht explizit erlaubte Flags und Parameter werden mit einer klaren Fehlermeldung abgelehnt (Allowlist, nicht Blocklist).
-5. Custom Commands (`snake`, `watchthis`, `minecraft`, `help` usw.) existieren **nicht** auf dem Server. Sie werden vom Frontend simuliert. So braucht der User keine Rechte, Dateien auszuführen.
+1. Der User führt **keine echten Commands** aus. Es gibt eine feste Menge simulierter Commands im Browser.
+2. Der Server startet **niemals Prozesse** und nimmt **keine Pfade, Dateinamen oder Commands** vom User entgegen.
+3. Der Server liefert den Content-Ordner nur **lesend und vollständig** als Snapshot aus. Alles darin ist öffentlich.
+4. Der User darf seine **lokale Kopie** frei bearbeiten. Änderungen bleiben in seinem Browser und gehen nie an den Server.
+5. Unbekannte Commands, Flags und Parameter werden mit klarer Meldung abgelehnt (Allowlist aus der Registry).
 
-### Pfad-Validierung (bei jedem Command)
+### Snapshot (`GET /api/fs`)
 
-1. Der eingegebene Pfad wird relativ zum aktuellen Verzeichnis in einen **absoluten Pfad** aufgelöst.
-2. Der Pfad wird mit `fs.realpath` aufgelöst, damit Symlinks keine Umgehung erlauben.
-3. Der Pfad wird gegen die **Allowlist** geprüft. Die Allowlist ist die Menge aller Pfade innerhalb des Content-Ordners. Sie wird beim Serverstart einmal generiert, als Pfad zum Content-Ordner kombiniert mit allen Pfaden darin, und nur im Speicher gehalten. Spätere Commands (`cat`, `cd`, `tree` ...) nutzen dieselbe Allowlist.
-4. Erst danach wird der Command wirklich ausgeführt.
-5. Alles außerhalb der Allowlist wird abgelehnt (`..`-Tricks, absolute Pfade, URL-Encoding, Null-Bytes, Symlinks, überlange Pfade).
+- Wird **einmal beim Serverstart** aus dem Content-Ordner erzeugt und im Speicher gehalten. Neue Inhalte: Content-Ordner ändern, Container neu starten.
+- Format (Typen im `shared`-Paket):
+  ```ts
+  type FsNode =
+    | { type: 'dir'; name: string; mtime: string; children: FsNode[] }
+    | { type: 'file'; name: string; mtime: string; size: number; text?: string; binary?: true };
+  interface Snapshot { version: string; root: FsNode }   // version = Hash über den Inhalt
+  ```
+- Der Generator
+  - liest nur Ordner und reguläre Dateien **innerhalb** des Content-Ordners und **ignoriert Symlinks** (kein Folgen, kein Eintrag),
+  - überspringt Einträge mit ungültigen Namen (Steuerzeichen, `/`, `\`, länger als 255 Zeichen),
+  - liefert Textdateien (UTF-8, ohne Null-Bytes) mit Inhalt aus, Binärdateien nur als Eintrag mit `binary: true`,
+  - hat feste Limits: Datei max. 64 KB Text, Snapshot max. 2 MB, max. 2000 Einträge, max. Tiefe 12. Was darüber liegt, wird weggelassen und geloggt,
+  - enthält nur relative Namen, nie Hostpfade.
+- Antwort mit `ETag` (= `version`) und `Cache-Control`, damit der Browser bei unveränderten Inhalten nichts neu lädt.
+
+### Virtuelles Dateisystem (Browser)
+
+- Baum aus Ordnern und Dateien im Speicher, aufgebaut aus dem Snapshot. Keine Symlinks.
+- Pfade wie in einer Shell: relativ zum aktuellen Ordner oder absolut ab `/`. `..` endet an `/`, `~` ist `/`. Mehrfache `/` und `.` werden normalisiert.
+- Dateien mit `binary: true` lassen sich auflisten, aber nicht mit `cat` anzeigen.
+- **Limits für die lokale Kopie:** Datei max. 64 KB, gesamte lokale Kopie max. 1 MB, max. 2000 Einträge, Name max. 255 Zeichen, Pfad max. 1024 Zeichen, keine Steuerzeichen und kein `/` in Namen. Überschreitungen ergeben eine klare Fehlermeldung.
+
+### Persistenz
+
+- Nach jeder Änderung wird die lokale Kopie im `localStorage` gespeichert (zusammen mit der Snapshot-`version`, auf der sie beruht). Beim nächsten Besuch geht es dort weiter.
+- Liefert der Server eine **neue `version`**, wird die lokale Kopie verworfen und ein kurzer Hinweis gezeigt (z. B. `Inhalte wurden aktualisiert, deine Änderungen wurden zurückgesetzt.`).
+- `reset` stellt jederzeit den Originalzustand aus dem Snapshot her.
+- Ist `localStorage` nicht verfügbar (privater Modus, voll), funktioniert alles weiter, nur ohne Speichern über den Besuch hinaus.
 
 ### Zustand
 
-Der Client trackt das aktuelle Verzeichnis (relativ zur simulierten Root `/`) und schickt es bei jedem Request mit. Der Server ist stateless und **validiert das Verzeichnis bei jedem Request neu**. Der Server leakt nie echte Hostpfade, die Ausgabe zeigt nur simulierte Pfade.
+Das aktuelle Verzeichnis lebt nur im Browser. Wird der aktuelle Ordner gelöscht oder verschoben, wechselt die Shell nach `/`.
 
 ---
 
 ## 3. Startup
 
-Beim Laden der Seite läuft eine Animation. ASCII-Zeichen laufen "Matrix-mäßig" von oben nach unten, danach erscheint der erste Screen.
+Beim Laden der Seite läuft eine Animation. ASCII-Zeichen laufen "Matrix-mäßig" von oben nach unten und geben dabei den darunter schon gerenderten ersten Screen frei.
 
 Der erste Screen enthält:
 
@@ -69,29 +107,48 @@ Der erste Screen enthält:
 - darunter die Unterschrift **"an ai coding project"**
 - einen Hinweis, `help` oder `steckbrief` auszuführen
 
-Die Animation ist überspringbar (beliebige Taste/Klick) und respektiert `prefers-reduced-motion`.
+Die Animation ist überspringbar (beliebige Taste/Klick) und respektiert `prefers-reduced-motion`. Der Snapshot wird parallel geladen. Schlägt das fehl, erscheint ein Hinweis; Commands ohne Dateisystem (`help`, `clear`, ...) funktionieren trotzdem.
 
 ---
 
 ## 4. Commands
 
-Alle Commands stehen in einer zentralen **Command-Registry**. Jeder Eintrag enthält: Name, Aliase, Beschreibung, Benutzung (Usage), Beispiel und Handler (client- oder serverseitig). `help` wird automatisch aus dieser Registry generiert.
+Alle Commands stehen in einer zentralen **Command-Registry**. Jeder Eintrag enthält: Name, Aliase, Beschreibung, Benutzung (Usage), Beispiel, erlaubte Flags, Anzahl Argumente und Handler. `help` wird automatisch aus dieser Registry generiert. Alle Handler laufen im Browser.
 
 ### help
 
 Gibt eine Liste aller Commands aus, jeweils mit Beschreibung, Benutzung und Beispiel.
 
-### ls (serverseitig)
+### Dateisystem: lesen
 
-Zeigt das simulierte Dateisystem an, das wirklich auf dem Server existiert. Pfad-Validierung wie in Abschnitt 2. Erlaubte Flags in v1: nur `-l` und `-a`, alles andere wird abgelehnt.
+| Command | Flags | Beschreibung |
+| --- | --- | --- |
+| `ls [ordner]` | `-l`, `-a` (auch `-la`) | Inhalt anzeigen, `-l` ausführlich, `-a` mit versteckten Dateien |
+| `cd [ordner]` | – | Ordner wechseln, ohne Angabe nach `/` |
+| `pwd` | – | aktuellen Ordner anzeigen |
+| `cat <datei>` | – | Textdatei anzeigen (keine Binärdateien) |
+| `tree [ordner]` | `-L <1–5>` | Baumansicht mit Tiefen- und Ausgabelimit |
 
-### cd, pwd, cat, tree (serverseitig)
+### Dateisystem: bearbeiten (nur lokale Kopie)
 
-Gleiche Validierung und Allowlist wie `ls`. Nur lesend. `cat` hat ein Größenlimit und gibt nur Textdateien aus.
+| Command | Flags | Beschreibung |
+| --- | --- | --- |
+| `mkdir <ordner>` | `-p` | Ordner anlegen, `-p` auch Zwischenordner |
+| `touch <datei>` | – | leere Datei anlegen bzw. Zeitstempel setzen |
+| `rm <pfad>` | `-r`, `-f` | Datei löschen, `-r` auch Ordner mit Inhalt |
+| `rmdir <ordner>` | – | leeren Ordner löschen |
+| `mv <quelle> <ziel>` | – | verschieben oder umbenennen |
+| `cp <quelle> <ziel>` | `-r` | kopieren, `-r` für Ordner |
+| `echo <text>` | – | Text ausgeben |
+| `reset` | – | lokale Änderungen verwerfen, Original wiederherstellen (mit Rückfrage `y/N`) |
+
+- **Umleitung:** Commands mit Textausgabe (`echo`, `cat`, `ls`, `tree`, `pwd`) unterstützen `> datei` (überschreiben) und `>> datei` (anhängen). Weitere Shell-Syntax (Pipes, `;`, `&&`, Variablen, Globs) gibt es nicht.
+- Fehlermeldungen wie in einer Shell, z. B. `rm: docs: Ist ein Ordner (rm -r verwenden)`.
+- Ein Editor (`nano`/`edit`) ist eine spätere Erweiterung und nicht Teil von Meilenstein 3.
 
 ### snake (clientseitig)
 
-Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplett im Frontend implementiert und existiert nicht als Datei auf dem Server.
+Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplett im Frontend implementiert und existiert nicht als Datei.
 
 - Es läuft im Terminal im ASCII-Stil. Während des Spiels wird nichts anderes im Terminal angezeigt.
 - Steuerung per Pfeiltasten und WASD. Auf Mobilgeräten wird das Spiel **nicht unterstützt** (siehe Abschnitt 4a: Warnung vor dem Start).
@@ -100,15 +157,15 @@ Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplet
 
 ### watchthis (Aliase: `wt`, `WatchThis`)
 
-Zeigt eine Boot-Animation mit einem ASCII-Ladebalken. Danach öffnet die Website selbst einen neuen Tab mit `https://movies.maxim-dieball.de`. Es wird kein echtes Programm ausgeführt. Manche Browser blockieren `window.open` ohne User-Geste, biete daher einen anklickbaren Link im Terminal als Fallback an.
+Zeigt eine Boot-Animation mit einem ASCII-Ladebalken. Danach öffnet die Website selbst einen neuen Tab mit `https://movies.maxim-dieball.de`. Manche Browser blockieren `window.open` ohne User-Geste, biete daher einen anklickbaren Link im Terminal als Fallback an.
 
 ### minecraft
 
-Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-dieball.de`): Online-Status, Spielerzahl, Spielerliste, Version, MOTD und Ping. Dafür nutzt du bestehende Möglichkeiten wie den Server-List-Ping (`minecraft-server-util`). Der Backend-Endpoint cached die Antwort einige Sekunden und hat ein Timeout. Die Serveradresse und der Port kommen aus Umgebungsvariablen. Wenn der Server offline ist, wird das freundlich angezeigt.
+Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-dieball.de`): Online-Status, Spielerzahl, Spielerliste, Version, MOTD und Ping. Der Browser kann das Minecraft-Protokoll nicht selbst sprechen, deshalb gibt es dafür **einen Server-Endpunkt** (`GET /api/minecraft`, Server-List-Ping mit `minecraft-server-util`). Er nimmt keine Parameter vom User, cached die Antwort einige Sekunden und hat ein Timeout. Adresse und Port kommen aus Umgebungsvariablen. Ist der Server offline, wird das freundlich angezeigt.
 
 ### steckbrief
 
-Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Repos), gecached oder zur Buildzeit geholt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei ausgeliefert (ich stelle das Foto bereit, bis dahin ein Platzhalter).
+Zeigt einen Steckbrief von mir. Die Daten kommen von GitHub (Profil, Repos): Der Browser fragt die öffentliche GitHub-API direkt ab und cached die Antwort (z. B. `sessionStorage`). Schlägt das fehl (Rate-Limit, offline), wird ein Fallback aus dem Content-Ordner angezeigt. Oben steht ein Bild von mir, **vorab in ASCII-Zeichen gerendert** und als Textdatei im Content-Ordner abgelegt (breite und schmale Variante; ich stelle das Foto bereit, bis dahin ein Platzhalter).
 
 ### Weitere Basis-Commands (clientseitig)
 
@@ -116,7 +173,7 @@ Zeigt einen Steckbrief von mir. Die Daten kommen vorerst von GitHub (Profil, Rep
 
 ### Terminal-UX
 
-Tab-Completion für Commands und Pfade, Pfeil hoch/runter für die History, Ctrl+L für `clear`, bedienbar per Screenreader (ARIA-Live-Region für die Ausgabe). Die mobile Bedienung ist in Abschnitt 4a beschrieben.
+Tab-Completion für Commands und Pfade (lokal, ohne Server), Pfeil hoch/runter für die History, Ctrl+L für `clear`, Ctrl+C bricht Eingabe bzw. laufende Commands ab, bedienbar per Screenreader (ARIA-Live-Region für die Ausgabe). Die mobile Bedienung ist in Abschnitt 4a beschrieben.
 
 ---
 
@@ -125,69 +182,79 @@ Tab-Completion für Commands und Pfade, Pfeil hoch/runter für die History, Ctrl
 Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren. Da es ein Terminal ist, gehst du davon aus, dass die **Bildschirmtastatur die ganze Zeit offen ist**. Das UI ist dafür gebaut, nicht nur "irgendwie nutzbar".
 
 **Layout und Tastatur**
-- Das Terminal nutzt nur die **sichtbare Fläche über der Tastatur**. Dafür verwendest du `window.visualViewport` (Resize- und Scroll-Events) und `dvh`-Einheiten, nicht `100vh`. Die Eingabezeile sitzt immer direkt über der Tastatur und wird nie verdeckt.
-- Die Ausgabe scrollt automatisch zur neuesten Zeile, auch wenn sich die sichtbare Höhe ändert (Tastatur öffnet, Browser-Leiste verschwindet, Gerät dreht).
-- Die Tastatur bleibt offen. Der Fokus geht beim Absenden eines Commands, beim Scrollen und beim Tippen auf die Ausgabe nicht verloren. Ein Tippen auf die Terminal-Fläche fokussiert die Eingabe.
-- Das Eingabefeld hat `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"` und mindestens 16 px Schrift (sonst zoomt iOS beim Fokus). Setze `enterkeyhint="send"` und prüfe, dass die Enter-Taste den Command absendet.
+- Das Terminal nutzt nur die **sichtbare Fläche über der Tastatur** (`window.visualViewport`, `dvh`), nicht `100vh`. Die Eingabezeile wird nie verdeckt.
+- Die Ausgabe scrollt automatisch zur neuesten Zeile, auch wenn sich die sichtbare Höhe ändert. Wischen über die Ausgabe scrollt den Verlauf.
+- Die Tastatur bleibt offen. Der Fokus geht beim Absenden, beim Scrollen und beim Tippen auf die Ausgabe nicht verloren.
+- Eingabe über ein natives `<input>` auf der aktuellen Prompt-Zeile (Spike-Ergebnis) mit `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"`, `enterkeyhint="send"` und mindestens 16 px Schrift.
 - Sicherheitsbereiche (`env(safe-area-inset-*)`) werden beachtet.
 
-**Quick-Key-Leiste**
-Direkt über der Tastatur gibt es eine schmale Leiste mit den Tasten, die mobil fehlen: `Tab`, `↑`, `↓` (History), `Ctrl+C` (Abbrechen) und optional `/`, `~`, `-`. Sie nimmt der Tastatur nicht den Fokus.
+**Quick-Keys**
+Direkt über der Tastatur gibt es die Tasten, die mobil fehlen: `Tab`, `↑`, `↓` (History), `Ctrl+C` (Abbrechen) und `/`, `~`, `-`. Sie nehmen der Tastatur nicht den Fokus. (Geplant für Meilenstein 7: hinter einem kleinen runden `>`-Button unten links einklappbar.)
 
 **Darstellung**
-- Schmale Bildschirme (ab ca. **360 px Breite**) werden unterstützt. Die Schriftgröße ist so gewählt, dass eine sinnvolle Zeilenbreite entsteht (z. B. 40–45 Zeichen).
-- Ausgaben von `help`, `ls`, `tree`, `minecraft` und `steckbrief` brechen sinnvoll um oder haben eine **schmale Variante** (z. B. kürzere Tabellen, `help` mit untereinander statt nebeneinander stehenden Feldern).
+- Schmale Bildschirme (ab ca. **360 px Breite**) werden unterstützt, mit einer sinnvollen Zeilenbreite (ca. 40–45 Zeichen).
+- Ausgaben von `help`, `ls`, `tree`, `minecraft` und `steckbrief` brechen sinnvoll um oder haben eine **schmale Variante**.
 - Der ASCII-Schriftzug "MAXIM OS" und das ASCII-Bild des Steckbriefs haben jeweils eine **schmale mobile Version**, die ohne Zeilenumbruch in die Breite passt.
-- Die Matrix-Animation läuft auch mobil flüssig (Zeichenanzahl an die Breite anpassen) und ist überspringbar.
-
-**Eingabe-Spike (in Meilenstein 1, vor dem weiteren Ausbau)**
-xterm.js ist auf Mobilgeräten bei der Texteingabe bekanntermaßen heikel (Autokorrektur, Komposition, Zeichen-Events). Prüfe deshalb früh, ob die Eingabe mit xterm.js auf Android (Chrome) und iOS (Safari) zuverlässig funktioniert. Wenn nicht, schlägst du eine Alternative vor, zum Beispiel ein eigenes, sichtbares Eingabefeld unter der xterm.js-Ausgabe oder eine eigene Terminal-Darstellung. Die Entscheidung legst du mir mit kurzer Begründung vor, bevor du auf dieser Basis weiterbaust. Echte Geräte kann ich testen, du lieferst mir dafür eine Testanleitung (URL im LAN, was ich prüfen soll).
+- Die Matrix-Animation läuft auch mobil flüssig und ist überspringbar.
 
 **Minigames auf dem Handy**
 - Minigames (`snake` und künftige) sind mobil **nicht unterstützt**, es gibt keine Touch-Steuerung.
 - Erkennung: Touch-Gerät ohne feinen Zeiger (`matchMedia('(pointer: coarse)')` kombiniert mit `(hover: none)`) oder sehr schmaler Viewport.
 - Vor dem Start erscheint im Terminal eine Warnung, z. B. `⚠ Snake wird auf Handys nicht unterstützt. Trotzdem starten? (y/N)`. Standard ist Abbruch. Bei `y` startet das Spiel, ohne dass die Steuerung angepasst wird.
-- Auch auf Tablets mit Tastatur soll der Start möglich sein, wenn der Nutzer mit `y` bestätigt.
 
 ---
 
-## 5. Härtung des Backends
+## 5. Sicherheit und Härtung
 
-- Rate-Limiting (z. B. `@fastify/rate-limit`) pro IP. Da ein Tunnel die echte IP evtl. nicht durchreicht, ist das Limit zusätzlich global gesetzt.
-- Eingabe-Limits: maximale Länge des Command-Strings, maximale Anzahl Argumente, maximale Größe von Ausgabe und Dateien.
-- Strikte Schema-Validierung des Request-Bodys.
-- Sicherheits-Header (CSP, `X-Content-Type-Options`, `Referrer-Policy`), z. B. über `@fastify/helmet`.
-- Keine Stacktraces oder Hostpfade in Fehlerantworten.
+### Was bleibt
+
+- Kein Prozessstart im Server (`child_process` per Lint-Regel und Test verboten).
+- Snapshot-Generator ohne Symlinks, mit Limits und ohne Hostpfade (Abschnitt 2), mit Tests für Symlinks nach außen, Symlink-Schleifen, Binärdateien, ungültige Namen und Limits.
+- Keine Stacktraces oder Hostpfade in Antworten.
+- Keine Terminal-Injection: Steuer- und Escape-Zeichen aus Dateinamen, Inhalten und Eingaben werden vor der Ausgabe entfernt; Inhalte nie als HTML einfügen.
+- Sicherheits-Header über `@fastify/helmet`, inklusive CSP (`script-src 'self'`; `connect-src` nur `'self'` und `https://api.github.com`).
+- Ein einfaches globales Rate-Limit für `/api/*` (der Snapshot ist gecached, Minecraft hat eigenen Cache).
+- Container-Härtung (Abschnitt 9).
+
+### Was gegenüber v3 entfällt (und warum)
+
+| Entfällt | Grund |
+| --- | --- |
+| Pfad-Validator mit `realpath` und Allowlist pro Request | Der Server bekommt keine Pfade mehr vom User. Die einzige Dateisystem-Grenze ist der Snapshot-Generator, der nur den eigenen Content-Ordner liest. |
+| Server-seitiger Command-Parser, `POST /api/command`, `POST /api/complete` | Commands laufen im Browser. Der Server hat keinen Endpunkt mehr, der Eingaben verarbeitet. |
+| Strikte Schema-Validierung von Request-Bodys | Es gibt keine Request-Bodys mehr (nur `GET`). |
+| Rate-Limit pro Client plus global mit eigener Logik | Ein globales Limit reicht für zwei gecachte `GET`-Endpunkte. |
+| Großes Security-Review des Pfad-Validators | Ersetzt durch ein kurzes Review von Snapshot-Generator und Terminal-Ausgabe. |
+| Schutz der lokalen Kopie vor dem User | Der User verändert nur seine eigene Kopie in seinem eigenen Browser. Das betrifft niemanden sonst. |
 
 ---
 
 ## 6. Development Guidelines
 
-- **Test-driven development:** zuerst der Test, dann die Implementierung. Besonders gründlich beim Pfad-Validator und beim Command-Parser.
+- **Test-driven development:** zuerst der Test, dann die Implementierung. Besonders gründlich beim virtuellen Dateisystem (Pfadauflösung, alle bearbeitenden Operationen inkl. Randfälle wie `mv` in sich selbst, Limits, Persistenz), beim Command-Parser (Flags, Anführungszeichen, `>`/`>>`) und beim Snapshot-Generator.
 - **Unit/API-Tests** mit Vitest, im Container.
 - **UI-Tests mit Playwright, die Screenshots erzeugen.** Du schaust sie dir als Entwickler an, um das UI zu prüfen. Sie laufen lokal im Playwright-Container und **nicht** in der Pipeline. Die Screenshots landen in einem git-ignorierten Ordner.
-- **In der Pipeline** laufen nur UI-Tests, die per `toHaveScreenshot()` prüfen, dass sich nichts verändert hat, was eigentlich unverändert bleiben sollte.
+- **In der Pipeline** laufen nur Regressionstests (`toHaveScreenshot()` und funktionale UI-Tests), die prüfen, dass sich nichts verändert hat, was unverändert bleiben sollte.
 - Die Baselines werden ausschließlich im Playwright-Container erzeugt, damit lokal und in der CI identisch gerendert wird.
-- Playwright läuft mit mehreren Projekten: Desktop (1280×800) und mobiles Hochformat (mindestens 390×844 und 360×640). Mobile Tests simulieren die offene Tastatur, indem sie die sichtbare Höhe verkleinern (ca. 40–50 %), und prüfen: Eingabezeile sichtbar, Ausgabe scrollt nach unten, Quick-Key-Leiste sichtbar, kein horizontales Scrollen, Snake zeigt die Warnung.
-- Die mobilen Screenshots schaust du dir wie die Desktop-Screenshots als Entwickler an. In die Pipeline kommen nur die Regressionstests.
+- Playwright läuft mit mehreren Projekten: Desktop (1280×800) und mobiles Hochformat (mindestens 390×844 und 360×640), dazu WebKit für die mobile Eingabe. Mobile Tests simulieren die offene Tastatur, indem sie die sichtbare Höhe verkleinern (ca. 40–50 %), und prüfen: Eingabezeile sichtbar, Ausgabe scrollt nach unten, Quick-Keys sichtbar, kein horizontales Scrollen, Snake zeigt die Warnung.
 
 ---
 
 ## 7. GitHub
 
-- Repo: **`maxim-os-website`** (existiert, leer).
+- Repo: **`maxim-os-website`**.
 - Vor jedem Push läuft die Test-Pipeline (GitHub Actions): Lint, Typecheck, Vitest, Playwright-Regression, Build. Die CI nutzt dieselben Container wie die lokale Entwicklung.
-- Ein lokaler Pre-push-Hook (z. B. via `husky`) führt mindestens Lint, Typecheck und Unit-Tests aus, ebenfalls im Container.
+- Ein lokaler Pre-push-Hook führt mindestens Ticket-Check, Lint, Typecheck und Unit-Tests aus, ebenfalls im Container.
 - `main` ist nur mit grüner Pipeline mergebar. Pro Meilenstein ein Tag (`mvp-1`, `mvp-2`, ...).
 
 ---
 
 ## 7a. Ticketsystem (GitHub Kanban)
 
-Jede Arbeit läuft über Tickets auf einem **GitHub-Projects-Kanban-Board** des Repos. Die vollständigen Regeln stehen in der `CLAUDE.md`. Für dich als Overseer-Agent bedeutet das:
+Jede Arbeit läuft über Tickets auf dem **GitHub-Projects-Kanban-Board** des Repos. Die vollständigen Regeln stehen in der `CLAUDE.md`. Für dich als Overseer-Agent bedeutet das:
 
-1. **Setup (vor dem ersten Code, in Meilenstein 1):** Prüfe, ob `gh` eingeloggt ist und die nötigen Rechte für Projects hat. Falls nicht, sag mir, was ich tun muss. Lege das Board mit den Spalten `Backlog`, `Ready`, `In Progress`, `In Review`, `Done` an, außerdem die Labels (`feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`) und die Meilensteine `mvp-1` bis `mvp-6`.
-2. **Planung:** Nach meiner Freigabe des Plans legst du zu jedem Meilenstein ein Epic-Ticket und die Einzeltickets mit Akzeptanzkriterien an. Meilenstein 1 kommt auf `Ready`, die späteren bleiben im `Backlog`, bis sie dran sind.
+1. **Board und Labels** sind eingerichtet (`Backlog`, `Ready`, `In Progress`, `In Review`, `Done`; Labels `feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`, `epic`). Für v4 kommt der Meilenstein `mvp-7` dazu.
+2. **Planung:** Zu jedem Meilenstein gibt es ein Epic-Ticket und Einzeltickets mit Akzeptanzkriterien. Der aktuelle Meilenstein steht auf `Ready`, die späteren bleiben im `Backlog`, bis sie dran sind.
 3. **Delegation:** Du gibst Subagents ihre Aufgaben nur über Tickets. Im Auftrag steht die Ticketnummer. Ein Subagent ohne Ticketnummer darf nicht arbeiten.
 4. **Spontane Änderungen:** Jeder Agent legt dafür **vorher selbst** ein Ticket mit dem Label `unplanned` an (siehe `CLAUDE.md`). Große oder meilensteinfremde Ideen landen nur im `Backlog`.
 5. **Meilenstein-Abschluss:** Ein Meilenstein ist erst fertig, wenn alle seine Tickets auf `Done` stehen, das Epic geschlossen ist und die Zusammenfassung an mich auch die `unplanned`-Tickets auflistet, die währenddessen entstanden sind.
@@ -195,17 +262,18 @@ Jede Arbeit läuft über Tickets auf einem **GitHub-Projects-Kanban-Board** des 
 
 ---
 
-## 8. Projektstruktur (Vorschlag, du darfst mit Begründung abweichen)
+## 8. Projektstruktur
 
 ```
 maxim-os-website/
 ├─ CLAUDE.md
 ├─ apps/
-│  ├─ web/            # Vite + xterm.js, Command-Registry (Client), Snake, Animationen
-│  └─ server/         # Fastify, Pfad-Validator, FS-Commands, Minecraft-Status
+│  ├─ web/            # Vite + xterm.js: Terminal, Shell, Command-Handler,
+│  │                  # virtuelles Dateisystem (vfs/), Persistenz, Snake, Animationen
+│  └─ server/         # Fastify: Snapshot-Generator, /api/fs, /api/health, später /api/minecraft
 ├─ packages/
-│  └─ shared/         # Typen und Command-Schema für Client und Server
-├─ content/           # simulierte Ordnerstruktur (Read-only im Container)
+│  └─ shared/         # Command-Registry, Parser, Snapshot-Typen
+├─ content/           # Inhalte für den Snapshot (öffentlich, Read-only im Container)
 ├─ scripts/           # ASCII-Bild-Generator
 ├─ docker/            # Dockerfiles
 ├─ docker-compose.yml        # dev und test
@@ -224,7 +292,7 @@ maxim-os-website/
 - `docker-compose.prod.yml` startet die Website auf **einem** klar dokumentierten Port, auf den ich den Tunnel zeigen lasse.
 - Konfiguration über Umgebungsvariablen mit einer `.env.example` (z. B. Minecraft-Host und -Port, Port der App, GitHub-Username). Es werden keine Secrets committed.
 - Healthcheck-Endpoint und Healthcheck im Compose-File.
-- Die `README.md` enthält: Voraussetzungen, Start und Stop, Update (neues Image ziehen/bauen), Logs, welcher Port freigegeben werden muss und welche Subdomains (`maxim-dieball.de`, `movies.`, `minecraft.`) ich im Tunnel einrichten muss.
+- Die `README.md` enthält: Voraussetzungen, Start und Stop, Update (neues Image ziehen/bauen), Inhalte aktualisieren (Content-Ordner ändern, Container neu starten), Logs, welcher Port freigegeben werden muss und welche Subdomains (`maxim-dieball.de`, `movies.`, `minecraft.`) ich im Tunnel einrichten muss.
 
 ---
 
@@ -233,16 +301,18 @@ maxim-os-website/
 - [ ] Alles (Dev, Tests, UI-Tests, Ausführen) läuft in Docker-Containern, auf dem Host ist nichts außer Docker nötig.
 - [ ] Startup-Animation (Matrix) und Startscreen "MAXIM OS" funktionieren, die Animation ist überspringbar.
 - [ ] `help` listet alle Commands mit Beschreibung, Usage und Beispiel (aus der Registry generiert).
-- [ ] Die Seite funktioniert im Hochformat ab 360 px Breite mit dauerhaft offener Tastatur: Eingabezeile immer sichtbar, Auto-Scroll, Fokus bleibt, keine Autokorrektur, kein iOS-Zoom, Quick-Key-Leiste vorhanden.
+- [ ] Die Seite funktioniert im Hochformat ab 360 px Breite mit dauerhaft offener Tastatur: Eingabezeile immer sichtbar, Auto-Scroll, Fokus bleibt, keine Autokorrektur, kein iOS-Zoom, Quick-Keys vorhanden.
 - [ ] Schmale Varianten für Schriftzug, Steckbrief-Bild und breite Ausgaben sind vorhanden, es gibt kein horizontales Scrollen.
-- [ ] Mobile Eingabe wurde geprüft (Spike-Ergebnis dokumentiert), Testanleitung für echte Geräte liegt vor.
-- [ ] `snake` zeigt auf Handys eine Warnung mit Abfrage (y/N) und startet standardmäßig nicht.
-- [ ] `ls`, `cd`, `pwd`, `cat`, `tree` arbeiten nur innerhalb des Content-Ordners. Alle Traversal- und Symlink-Tests schlagen erwartungsgemäß fehl, der Review-Subagent hat keine offenen Funde.
+- [ ] Der Server liefert den Content-Ordner nur als Snapshot (`GET /api/fs`) und nimmt keine Pfade oder Commands entgegen. Der Snapshot folgt keinen Symlinks, hält seine Limits ein und enthält keine Hostpfade.
+- [ ] `ls`, `cd`, `pwd`, `cat`, `tree` und die bearbeitenden Commands (`mkdir`, `touch`, `rm`, `rmdir`, `mv`, `cp`, `echo` mit `>`/`>>`) laufen im Browser auf der lokalen Kopie.
+- [ ] Änderungen bleiben über einen Reload erhalten (`localStorage`), `reset` stellt das Original her, eine neue Snapshot-Version setzt die Kopie mit Hinweis zurück.
 - [ ] Im Server wird nirgends ein Prozess gestartet (kein `child_process`).
+- [ ] Dateinamen und Inhalte können das Terminal nicht steuern (keine Escape-Sequenzen in der Ausgabe). Das Review von Meilenstein 3 hat keine offenen Funde.
+- [ ] `snake` zeigt auf Handys eine Warnung mit Abfrage (y/N) und startet standardmäßig nicht.
 - [ ] `snake` läuft im Terminal, lässt sich per Ctrl+C, Esc und ✕ beenden (Mac und Windows getestet).
 - [ ] `watchthis` zeigt den Ladebalken und öffnet danach `movies.maxim-dieball.de` (mit Fallback-Link).
 - [ ] `minecraft` zeigt Status, Spieler und Ping, auch sauber im Offline-Fall.
-- [ ] `steckbrief` zeigt GitHub-Daten und das vorgerenderte ASCII-Bild.
+- [ ] `steckbrief` zeigt GitHub-Daten (mit Fallback) und das vorgerenderte ASCII-Bild.
 - [ ] CI ist grün: Lint, Typecheck, Vitest, Playwright-Regression, Build.
 - [ ] Das Kanban-Board existiert, jede Änderung ist einem Ticket zugeordnet, jeder Commit und PR nennt eine Ticketnummer.
 - [ ] Spontane Änderungen haben ein eigenes `unplanned`-Ticket, das vor der Arbeit angelegt wurde.
