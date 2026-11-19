@@ -26,9 +26,20 @@ export function printable(text: string, max = 40): string {
   return safe.length > max ? `${safe.slice(0, max - 1)}…` : safe;
 }
 
-export type TokenizeResult = { ok: true; tokens: string[] } | { ok: false; error: string };
+/** Ausgabe-Umleitung: `> datei` überschreibt, `>> datei` hängt an. */
+export interface Redirect {
+  append: boolean;
+  target: string;
+}
 
-/** Zerlegt eine Eingabezeile in Tokens. Unterstützt "doppelte" und 'einfache' Anführungszeichen. */
+export type TokenizeResult =
+  { ok: true; tokens: string[]; redirect?: Redirect } | { ok: false; error: string };
+
+/**
+ * Zerlegt eine Eingabezeile in Tokens. Unterstützt "doppelte" und 'einfache'
+ * Anführungszeichen sowie eine Umleitung mit `>` oder `>>` (nicht in Anführungszeichen).
+ * Weitere Shell-Syntax (Pipes, `;`, `&&`, Variablen, Globs) gibt es nicht.
+ */
 export function tokenize(line: string): TokenizeResult {
   if (line.length > LIMITS.line) return { ok: false, error: 'Eingabe zu lang' };
   if (CONTROL_CHARS.test(line)) return { ok: false, error: 'Ungültige Zeichen in der Eingabe' };
@@ -37,27 +48,51 @@ export function tokenize(line: string): TokenizeResult {
   let current = '';
   let inToken = false;
   let quote: '"' | "'" | undefined;
+  let redirect: Redirect | undefined;
+  /** Nächstes Token ist das Ziel einer Umleitung. */
+  let pending: { append: boolean } | undefined;
 
-  for (const ch of line) {
+  const finish = (): string | undefined => {
+    if (!inToken) return undefined;
+    if (pending) {
+      redirect = { append: pending.append, target: current };
+      pending = undefined;
+    } else {
+      tokens.push(current);
+    }
+    current = '';
+    inToken = false;
+    return undefined;
+  };
+
+  const chars = [...line];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i]!;
     if (quote) {
       if (ch === quote) quote = undefined;
       else current += ch;
     } else if (ch === '"' || ch === "'") {
       quote = ch;
       inToken = true;
+    } else if (ch === '>') {
+      finish();
+      if (pending || redirect) return { ok: false, error: 'Nur eine Umleitung erlaubt' };
+      const append = chars[i + 1] === '>';
+      if (append) i++;
+      if (chars[i + 1] === '>') return { ok: false, error: 'Ungültige Umleitung' };
+      pending = { append };
     } else if (/\s/.test(ch)) {
-      if (inToken) tokens.push(current);
-      current = '';
-      inToken = false;
+      finish();
     } else {
       current += ch;
       inToken = true;
     }
   }
   if (quote) return { ok: false, error: 'Anführungszeichen nicht geschlossen' };
-  if (inToken) tokens.push(current);
+  finish();
+  if (pending) return { ok: false, error: 'Ziel der Umleitung fehlt' };
   if (tokens.length > LIMITS.tokens) return { ok: false, error: 'Zu viele Argumente' };
-  return { ok: true, tokens };
+  return redirect ? { ok: true, tokens, redirect } : { ok: true, tokens };
 }
 
 export type FlagValues = Record<string, true | number>;
@@ -72,6 +107,10 @@ export function parseArgs(spec: CommandSpec, args: readonly string[]): ParseResu
   const fail = (msg: string): ParseResult => ({ ok: false, error: `${spec.name}: ${msg}` });
   const flags: FlagValues = Object.create(null) as FlagValues;
   const operands: string[] = [];
+  if (spec.rawArgs) {
+    if (args.length > spec.operands.max) return fail('zu viele Argumente');
+    return { ok: true, flags, operands: [...args] };
+  }
   const byShort = new Map(spec.flags.map((f) => [f.short, f]));
 
   for (let i = 0; i < args.length; i++) {
