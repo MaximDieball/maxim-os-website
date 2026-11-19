@@ -72,6 +72,16 @@ function cloneNode(node: VNode): VNode {
   };
 }
 
+/** Länge des längsten Pfads unterhalb eines Knotens (relativ, z. B. "/a/b" = 4). */
+function deepest(node: VNode): number {
+  if (node.type === 'file') return 0;
+  let max = 0;
+  for (const child of node.children.values()) {
+    max = Math.max(max, 1 + child.name.length + deepest(child));
+  }
+  return max;
+}
+
 /** Anzahl Einträge und Text-Bytes eines Teilbaums (der Knoten selbst zählt mit). */
 function measure(node: VNode): { entries: number; bytes: number } {
   if (node.type === 'file') return { entries: 1, bytes: node.binary ? 0 : node.size };
@@ -89,8 +99,10 @@ function fromFsNode(node: FsNode): VNode | undefined {
   if (!isValidName(node.name)) return undefined;
   const mtime = Date.parse(node.mtime) || Date.now();
   if (node.type === 'file') {
-    return node.binary || node.text === undefined
-      ? { type: 'file', name: node.name, mtime, size: node.size, binary: true }
+    // Gespeicherte Daten können manipuliert sein: nur gültige Größen übernehmen.
+    const size = Number.isSafeInteger(node.size) && node.size >= 0 ? node.size : 0;
+    return node.binary || typeof node.text !== 'string'
+      ? { type: 'file', name: node.name, mtime, size, binary: true }
       : { type: 'file', name: node.name, mtime, size: byteLength(node.text), text: node.text };
   }
   const dir: VDir = { type: 'dir', name: node.name, mtime, children: new Map() };
@@ -317,6 +329,7 @@ export class Vfs {
     const to = this.target(src, dst);
     if (node.type === 'dir' && (to === src || to.startsWith(`${src}/`))) fail(MSG.intoSelf);
     if (to === '/') fail(MSG.root);
+    if (to.length + deepest(node) > NAME_LIMITS.path) fail(MSG.pathTooLong);
     const existing = this.get(to);
     if (existing && existing !== node) {
       if (node.type === 'dir' && existing.type !== 'dir') fail(MSG.notDir);
