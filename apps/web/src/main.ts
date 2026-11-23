@@ -51,6 +51,7 @@ async function boot(): Promise<void> {
       new Shell(out, workspace, {
         github: () => loadGithub({ storage: sessionStore() }),
         readme: (repo) => loadReadme(repo, { storage: sessionStore() }),
+        openUrl: (url) => void window.open(url, '_blank', 'noopener,noreferrer'),
       }),
   );
   // Klickbare Zeilen (z. B. Projekte) führen ihr Command aus, als wäre es getippt.

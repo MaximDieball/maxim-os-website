@@ -126,6 +126,24 @@ test.describe('profile commands', () => {
     await expect(live).toContainText('https://chromewebstore.google.com/detail/paper-memes');
   });
 
+  test('watchthis shows a loading bar and opens the movie page (#34)', async ({ page }) => {
+    await openTerminal(page);
+    await page.evaluate(() => {
+      const calls: string[][] = [];
+      (window as unknown as { __opened: string[][] }).__opened = calls;
+      window.open = (url?: string | URL, target?: string, features?: string) => {
+        calls.push([String(url), String(target), String(features)]);
+        return null;
+      };
+    });
+    await run(page, 'wt');
+    await expect(terminalOutput(page)).toContainText('100%');
+    await expect(terminalOutput(page)).toContainText('https://movies.maxim-dieball.de');
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __opened: string[][] }).__opened))
+      .toEqual([['https://movies.maxim-dieball.de', '_blank', 'noopener,noreferrer']]);
+  });
+
   test('about, whoami and history', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'about');

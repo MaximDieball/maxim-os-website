@@ -43,6 +43,8 @@ export interface ShellOutput {
    * (nur im Terminal; bei Umleitung in eine Datei entfällt es).
    */
   print(lines: string[], actions?: PrintActions): void;
+  /** Ersetzt die zuletzt ausgegebene Zeile, z. B. für Ladebalken (#34). Optional. */
+  replaceLast?(line: string): void;
   clear(): void;
   /** Aktuelle Breite in Zeichen. */
   cols(): number;
@@ -66,6 +68,10 @@ export interface CommandContext {
 export interface ShellServices {
   /** Öffentliche GitHub-Daten; undefined, wenn nicht erreichbar. */
   github?: () => Promise<GithubData | undefined>;
+  /** Wartet `ms` Millisekunden; endet sofort bei Abbruch (im Test ersetzbar). */
+  delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Öffnet eine Seite in einem neuen Tab (ohne Zugriff auf diese Seite). */
+  openUrl?: (url: string) => void;
   /** README eines eigenen Repos als Markdown (#89). */
   readme?: (repo: string) => Promise<string | undefined>;
 }
@@ -184,7 +190,14 @@ export class Shell {
     const ws = this.ws;
     const captured: string[] = [];
     const out: ShellOutput = parsed.redirect
-      ? { print: (l) => captured.push(...l), clear: () => {}, cols: () => FILE_COLS }
+      ? {
+          print: (l) => captured.push(...l),
+          replaceLast: (l) => {
+            captured[Math.max(0, captured.length - 1)] = l;
+          },
+          clear: () => {},
+          cols: () => FILE_COLS,
+        }
       : this.out;
 
     await handler({
