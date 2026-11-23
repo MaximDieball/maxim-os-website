@@ -202,7 +202,9 @@ Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren.
 
 **Layout und Tastatur**
 - Das Terminal nutzt nur die **sichtbare Fläche über der Tastatur** (`window.visualViewport`, `dvh`), nicht `100vh`. Die Eingabezeile wird nie verdeckt.
-- Die Ausgabe scrollt automatisch zur neuesten Zeile, auch wenn sich die sichtbare Höhe ändert. Wischen über die Ausgabe scrollt den Verlauf.
+- Kurze Ausgaben: Die Ansicht folgt bis zum Prompt. Ist eine Ausgabe länger als das Terminal, wird **nicht** ans Ende gescrollt: Die Ansicht bleibt am Anfang der Ausgabe stehen, der Command steht oben (#101).
+- Solange die Ansicht nicht ganz unten ist (lange Ausgabe, Mausrad, Wischen), erscheint unten in der Mitte ein kleiner runder Pfeil, der leicht auf und ab schwebt (ohne Animation bei `prefers-reduced-motion`). Ein Klick scrollt zum Prompt, ohne der Eingabe den Fokus zu nehmen. Tippen springt ebenfalls zum Prompt.
+- Ändert sich die sichtbare Höhe (Tastatur auf/zu), springt die Ansicht nur nach unten, wenn sie schon unten war. Wischen über die Ausgabe scrollt den Verlauf.
 - Die Tastatur bleibt offen. Der Fokus geht beim Absenden, beim Scrollen und beim Tippen auf die Ausgabe nicht verloren.
 - Eingabe über ein natives `<input>` auf der aktuellen Prompt-Zeile (Spike-Ergebnis) mit `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"`, `enterkeyhint="send"` und mindestens 16 px Schrift.
 - Sicherheitsbereiche (`env(safe-area-inset-*)`) werden beachtet.

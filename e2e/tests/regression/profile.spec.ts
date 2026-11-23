@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { clickText, openTerminal, run, terminalOutput, visibleLines } from '../helpers.ts';
+import {
+  clickText,
+  openTerminal,
+  run,
+  terminalOutput,
+  toBottom,
+  visibleLines,
+} from '../helpers.ts';
 
 // Steckbrief und Projekte (#29, #31). GitHub wird nie wirklich angefragt.
 const PROFILE = {
@@ -59,6 +66,8 @@ test.describe('profile commands', () => {
     await expect(live).toContainText('@MaximDieball');
     await expect(live).toContainText('Norderstedt');
     await expect(live).toContainText('Nordakademie');
+    // Lange Ausgabe bleibt oben stehen (#101); zum Ende per Pfeil
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText('Daten von GitHub');
     await expect(page).toHaveScreenshot('steckbrief.png');
   });
@@ -67,6 +76,7 @@ test.describe('profile commands', () => {
     await mockGithub(page, false);
     await openTerminal(page);
     await run(page, 'steckbrief');
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText('gespeicherte Daten');
   });
 
@@ -81,6 +91,7 @@ test.describe('profile commands', () => {
     const live = page.locator('#live');
     await expect(live).toContainText('Ein Terminal im Browser.');
     await expect(live).toContainText('https://github.com/MaximDieball/maxim-os-website');
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText('Alle Projekte');
 
     // Der GitHub-Link der Projektseite öffnet einen neuen Tab (window.open aufzeichnen).

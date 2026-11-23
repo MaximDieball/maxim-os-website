@@ -62,7 +62,8 @@ export function createNativeInput(
     form.style.setProperty('--prompt-h', `${Math.round(cell)}px`);
   };
 
-  const draw = (s: PromptState = state()): void => {
+  /** `scroll`: zum Prompt springen (beim Tippen ja, nach einem Resize nur, wenn man unten war). */
+  const draw = (s: PromptState = state(), scroll = true): void => {
     if (running && !shell.inputPrompt) return;
     const p = prompt();
     const r = renderPromptLine(p, s, term.cols, shown ? rows : 0);
@@ -80,7 +81,7 @@ export function createNativeInput(
     shown = true;
     rows = r.rows;
     term.write(r.seq, () => {
-      term.scrollToBottom();
+      if (scroll) term.scrollToBottom();
       placeInput();
     });
   };
@@ -121,14 +122,49 @@ export function createNativeInput(
   /** Zeilen, die abgeschickt wurden, während noch ein Command lief (wie Type-ahead in bash). */
   const queue: string[] = [];
 
+  /**
+   * Lange Ausgaben (#101): Ist alles vom Command bis zum neuen Prompt höher als das
+   * Terminal, bleibt die Ansicht am Command stehen statt ans Ende zu springen.
+   * Der Pfeil (scroll-arrow.ts) führt dann nach unten.
+   */
+  const anchor = (getStart: () => IMarker | undefined): void => {
+    term.write('', () => {
+      // Erst hier lesen: der Marker entsteht selbst in einem Write-Callback
+      const start = getStart();
+      // Fertig gezeichnet: Tests und Screenreader-Hilfen können sich daran orientieren
+      delete document.documentElement.dataset.busy;
+      if (start && !start.isDisposed) {
+        const b = term.buffer.active;
+        if (b.baseY + b.cursorY - start.line + 1 > term.rows) term.scrollToLine(start.line);
+      }
+      start?.dispose();
+    });
+  };
+
   const run = (line: string): void => {
     const controller = new AbortController();
     running = controller;
+    document.documentElement.dataset.busy = 'true';
+    // Anfang der Command-Zeile merken (der Prompt-Marker wird beim nächsten Prompt ersetzt)
+    let start: IMarker | undefined;
+    term.write('', () => {
+      if (!marker || marker.isDisposed) return;
+      const b = term.buffer.active;
+      start = term.registerMarker(marker.line - (b.baseY + b.cursorY));
+    });
     void shell.execute(line, controller.signal).finally(() => {
-      if (running !== controller) return; // per Ctrl+C abgebrochen
+      if (running !== controller) {
+        // per Ctrl+C abgebrochen
+        delete document.documentElement.dataset.busy;
+        return void term.write('', () => start?.dispose());
+      }
       running = undefined;
       const next = queue.shift();
-      if (next === undefined) return draw();
+      if (next === undefined) {
+        draw();
+        return anchor(() => start);
+      }
+      term.write('', () => start?.dispose());
       // Gepufferte Zeile wie getippt anzeigen und ausführen.
       draw({ value: next, caret: next.length, focused: false });
       commit();
@@ -218,6 +254,7 @@ export function createNativeInput(
     },
     redraw() {
       if (!shown) return;
+      const stick = view.atBottom();
       // Nach einem Resize hat xterm.js die Zeile evtl. neu (oder gar nicht) umgebrochen:
       // Zum gemerkten Anfang der Prompt-Zeile zurück, statt Zeilen zu schätzen.
       term.write('', () => {
@@ -227,7 +264,7 @@ export function createNativeInput(
             ? Math.max(0, b.baseY + b.cursorY - marker.line)
             : renderPromptLine(prompt(), lastState, term.cols, 0).rows;
         last = '';
-        draw();
+        draw(undefined, stick);
       });
     },
   };

@@ -31,7 +31,7 @@ Persönliche Website, die ein Terminal simuliert ("MAXIM OS", "an ai coding proj
 
 Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren. Das Terminal ist dort ein Terminal mit **dauerhaft geöffneter Bildschirmtastatur**. Davon geht das UI immer aus.
 
-- Das Layout orientiert sich an der **sichtbaren Fläche über der Tastatur** (`visualViewport`, `dvh`), nicht an der Fensterhöhe ohne Tastatur. Die Eingabezeile und die letzte Ausgabe bleiben immer sichtbar, die Ausgabe scrollt automatisch nach unten.
+- Das Layout orientiert sich an der **sichtbaren Fläche über der Tastatur** (`visualViewport`, `dvh`), nicht an der Fensterhöhe ohne Tastatur. Kurze Ausgaben bleiben mit der Eingabezeile sichtbar. Ist eine Ausgabe länger als das Terminal, bleibt die Ansicht an ihrem Anfang stehen (der Command oben, Entscheidung des Besitzers, #101); ein schwebender Pfeil unten in der Mitte führt zum Prompt, Tippen springt ebenfalls dorthin.
 - Getippt wird in ein natives `<input>` (Ergebnis des Eingabe-Spikes, `docs/mobile-input-spike.md`), das über der aktuellen Prompt-Zeile liegt. Es hat `autocapitalize="off"`, `autocorrect="off"`, `autocomplete="off"`, `spellcheck="false"` und mindestens 16 px Schrift (sonst zoomt iOS beim Fokus). Die Tastatur wird nicht durch Seitenwechsel oder Re-Rendern geschlossen.
 - Für Tasten, die es mobil nicht gibt (Tab, Pfeil hoch/runter, Ctrl+C), gibt es **Quick-Keys** direkt über der Tastatur.
 - Ausgaben (`help`, `ls`, `tree`, ASCII-Art) brechen auf schmalen Bildschirmen (ca. 360 px Breite) sinnvoll um bzw. nutzen eine schmale Variante.

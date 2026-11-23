@@ -21,6 +21,8 @@ export interface TerminalView {
   output: ShellOutput;
   /** Setzt, was ein Klick auf eine klickbare Zeile ausführt (#90). */
   onAction(run: (command: string) => void): void;
+  /** Ansicht steht ganz unten (#101). */
+  atBottom(): boolean;
   /** Passt Schriftgröße und Spalten an den Container an und scrollt nach unten. */
   fit(): void;
 }
@@ -65,11 +67,19 @@ export function createTerminal(
   // Den Cursor zeichnet die Prompt-Zeile selbst (prompt-line.ts).
   term.write('\x1b[?25l');
 
+  /** Ansicht steht ganz unten (am Prompt). */
+  const atBottom = (): boolean => {
+    const b = term.buffer.active;
+    return b.viewportY >= b.baseY;
+  };
+
   const fit = (): void => {
+    // Nur am Ende bleiben, wenn man schon dort war (#101): wer gerade liest, springt nicht.
+    const stick = atBottom();
     const size = fontSizeFor(container.clientWidth);
     if (term.options.fontSize !== size) term.options.fontSize = size;
     fitAddon.fit();
-    term.scrollToBottom();
+    if (stick) term.scrollToBottom();
   };
 
   const output: ShellOutput = {
@@ -108,6 +118,7 @@ export function createTerminal(
     term,
     output,
     fit,
+    atBottom,
     onAction: (run) => {
       runAction = run;
     },
