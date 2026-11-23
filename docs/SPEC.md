@@ -108,6 +108,7 @@ Der erste Screen enthält:
 - oben einen ASCII-Schriftzug **"MAXIM OS"**
 - darunter die Unterschrift **"an ai coding project"**
 - einen Hinweis, `help --short` oder `steckbrief` auszuführen (beide klickbar)
+- unten zentriert **Command-Vorschläge** als Chips, wie Beispiel-Prompts in Chat-Apps: `projects`, `watchthis`, `snake` und ab mvp-6 `minecraft` (nur Commands, die es gibt). Ein Klick führt den Command aus. Sie verschwinden nach dem ersten Command und werden ausgeblendet, wenn sie den Prompt überdecken würden (z. B. kleines Handy mit offener Tastatur). Auf dem Handy: eine kompakte Zeile ohne Hinweistext.
 
 Die Animation ist überspringbar (beliebige Taste/Klick) und respektiert `prefers-reduced-motion`. Der Snapshot wird parallel geladen. Schlägt das fehl, erscheint ein Hinweis; Commands ohne Dateisystem (`help`, `clear`, ...) funktionieren trotzdem.
 

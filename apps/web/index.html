@@ -14,7 +14,9 @@
   <body>
     <main id="app" class="app">
       <h1 class="sr-only">MAXIM OS Terminal</h1>
-      <div id="term" class="term"></div>
+      <div id="term" class="term">
+        <div id="suggestions" class="suggestions" role="group" aria-label="Vorschläge" hidden></div>
+      </div>
       <form id="prompt" class="prompt" autocomplete="off" hidden>
         <input
           id="cmd"

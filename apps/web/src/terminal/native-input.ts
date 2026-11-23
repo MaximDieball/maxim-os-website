@@ -145,6 +145,7 @@ export function createNativeInput(
       shell.answer(line);
       return;
     }
+    editor.onSubmit?.(line);
     if (running) {
       queue.push(line);
       return;
