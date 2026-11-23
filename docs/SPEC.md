@@ -14,9 +14,9 @@ Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln 
 - **Stand:** `mvp-1` (Skeleton) ist fertig. `mvp-2` (Dateisystem in der v3-Variante: Commands auf dem Server mit Pfad-Validator und Allowlist) ist gemergt und durch ein Security-Review gegangen. Es wird als historischer Stand abgeschlossen (Tag `mvp-2`) und in Meilenstein 3 auf das Client-Modell umgebaut.
 - **Agile Herangehensweise:** Arbeite in den Meilensteinen aus Abschnitt 1. Nach jedem Meilenstein gilt:
   1. Alle Tests sind grün, die Pipeline-Checks laufen durch.
-  2. Es gibt einen Merge nach `main` und ein Tag `mvp-N`. Gepusht wird nur bei grüner Pipeline.
+  2. Alle PRs des Meilensteins sind nach grüner Pipeline in `main` gemergt (das darfst du ohne Rückfrage, siehe `CLAUDE.md`, Arbeitsweise).
   3. Du gibst eine kurze Zusammenfassung (was geht jetzt, wie starte ich es, was ist als Nächstes dran, welche `unplanned`-Tickets sind entstanden).
-  4. **Du hältst an und wartest auf mein Feedback**, bevor du den nächsten Meilenstein beginnst. Jeder Meilenstein ergibt ein lauffähiges MVP.
+  4. **Du hältst an und wartest auf mein OK.** Ich sehe mir den Meilenstein an. Erst danach schließt du das Epic, setzt den Tag `mvp-N` und beginnst den nächsten Meilenstein. Jeder Meilenstein ergibt ein lauffähiges MVP.
 - **Subagents:**
   - Meilenstein 3 (Umbau) baust du selbst und sequenziell. Das Fundament (virtuelles Dateisystem, Snapshot-Format, Command-Registry) muss konsistent sein.
   - Ab Meilenstein 4 darfst du unabhängige Teile parallel an Subagents geben (z. B. Snake, Minecraft-Status, ASCII-Generator). Vorher definierst du die Schnittstellen (Typen im `shared`-Paket, Registry-Eintrag), damit nichts kollidiert.
