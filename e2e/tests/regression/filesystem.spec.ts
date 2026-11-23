@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { HELP_END, openTerminal, run, terminalOutput, visibleLines } from '../helpers.ts';
+import { HELP_END, openTerminal, run, terminalOutput, visibleLines, toBottom } from '../helpers.ts';
 
 // Dateisystem im Browser (Snapshot aus dem Production-Image mit dem echten content/-Ordner).
 test.describe('filesystem', () => {
@@ -35,6 +35,8 @@ test.describe('filesystem', () => {
   test('tree draws the folder structure', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'tree');
+    // auf kleinen Screens bleibt die Ansicht oben stehen (#101)
+    await toBottom(page);
     const out = terminalOutput(page);
     await expect(out).toContainText('ideas.txt');
     await expect(out).toContainText(/\d+ Ordner, \d+ Dateien/);
@@ -87,6 +89,7 @@ test.describe('filesystem', () => {
   test('wide outputs fit narrow screens without horizontal scrolling', async ({ page }) => {
     await openTerminal(page);
     for (const c of ['ls -la', 'tree', 'help']) await run(page, c);
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText(HELP_END);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

@@ -7,6 +7,7 @@ import {
   terminalOutput,
   terminalText,
   visibleLines,
+  toBottom,
 } from '../helpers.ts';
 
 // Mobile Eingabe (Ergebnis des Spikes #15): natives <input>, auf Chromium (Android) und WebKit (iOS).
@@ -14,6 +15,7 @@ test.describe('mobile input @input', () => {
   test('typing and enter run a command', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'help');
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText(HELP_END);
   });
 

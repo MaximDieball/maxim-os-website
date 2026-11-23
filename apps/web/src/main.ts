@@ -6,6 +6,7 @@ import { startscreenLines } from './boot/startscreen.ts';
 import { withSuggestions } from './shell/suggest.ts';
 import { createGameScreen } from './terminal/game-screen.ts';
 import { createSuggestions } from './terminal/suggestions.ts';
+import { bindScrollArrow } from './terminal/scroll-arrow.ts';
 import { browserStorage } from './vfs/workspace.ts';
 import { FS_UNAVAILABLE, Shell } from './shell/shell.ts';
 import { style } from './shell/text.ts';
@@ -85,6 +86,8 @@ async function boot(): Promise<void> {
   const updateSuggestions = (): void =>
     view.term.write('', () => requestAnimationFrame(() => suggestions.update()));
   editor.onSubmit = () => suggestions.dismiss();
+  // Pfeil nach unten, solange man nicht am Prompt ist (#101)
+  bindScrollArrow(view.term, termEl, byId('scroll-down'), () => editor.focus());
 
   trackVisualViewport(app, () => {
     view.fit();
@@ -109,7 +112,10 @@ async function boot(): Promise<void> {
         return measured > 0 ? measured : (view.term.options.fontSize ?? 15) * 1.15;
       },
     },
-    (el) => quickkeys.contains(el) || byId('suggestions').contains(el),
+    (el) =>
+      quickkeys.contains(el) ||
+      byId('suggestions').contains(el) ||
+      byId('scroll-down').contains(el),
     debugTouch,
   );
 

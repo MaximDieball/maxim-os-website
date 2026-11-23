@@ -7,6 +7,7 @@ import {
   terminalOutput,
   visibleLines,
   clickText,
+  toBottom,
 } from '../helpers.ts';
 
 test.describe('terminal', () => {
@@ -27,6 +28,7 @@ test.describe('terminal', () => {
     for (const name of ['help', 'clear', 'ls', 'cd', 'pwd', 'cat', 'tree']) {
       await expect(live).toContainText(name);
     }
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText(HELP_END);
     await expect(page).toHaveScreenshot('help.png');
   });
@@ -103,6 +105,7 @@ test.describe('terminal', () => {
     await run(page, 'clear');
     await expect(terminalOutput(page)).not.toContainText('an ai coding project');
     await run(page, 'help');
+    await toBottom(page);
     await expect(terminalOutput(page)).toContainText(HELP_END);
     await page.keyboard.press('Control+l');
     await expect(terminalOutput(page)).not.toContainText(HELP_END);

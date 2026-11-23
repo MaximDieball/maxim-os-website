@@ -26,6 +26,20 @@ export async function run(page: Page, command: string): Promise<void> {
   await page.keyboard.press('Enter');
 }
 
+/** Wartet, bis kein Command mehr läuft und alles gezeichnet ist (data-busy, #101). */
+export async function idle(page: Page): Promise<void> {
+  await expect(page.locator('html')).not.toHaveAttribute('data-busy', 'true');
+}
+
+/** Scrollt per Pfeil ganz nach unten, falls die Ansicht oben stehen geblieben ist. */
+export async function toBottom(page: Page): Promise<void> {
+  await idle(page);
+  const arrow = page.locator('#scroll-down');
+  // force: der Pfeil schwebt (Animation), Playwright würde sonst auf Stillstand warten
+  if (await arrow.isVisible()) await arrow.click({ force: true, timeout: 1000 }).catch(() => {});
+  await expect(arrow).toBeHidden();
+}
+
 /** Nicht-leere Zeilen im sichtbaren Terminalbereich (ohne Leerzeilen). */
 export async function visibleLines(page: Page): Promise<string[]> {
   const rows = await page.locator('.xterm-rows > div').allInnerTexts();
@@ -42,7 +56,8 @@ export const HELP_END = /Beispiel: +history|history {2,}history/;
  * Position: der letzte Abschnitt (span) mit diesem Text, kurz hinter seinem Anfang.
  */
 export async function clickText(page: Page, text: string): Promise<void> {
-  // Erst klicken, wenn alles gezeichnet ist und der leere Prompt unten steht.
+  // Erst klicken, wenn alles gezeichnet ist; dann vom Ende aus suchen.
+  await toBottom(page);
   await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
   const span = page.locator('.xterm-rows span').filter({ hasText: text }).last();
   // Kleine Bildschirme: xterm zeigt nur sichtbare Zeilen, also ggf. hochscrollen.
