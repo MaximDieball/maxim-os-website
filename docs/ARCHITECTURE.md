@@ -18,27 +18,29 @@ Browser (apps/web)                                     Server (apps/server, Fast
 │ Workspace: Kopie im localStorage, reset     │ /api/fs │ GET /api/health  (Status, Version)│
 │ Theme "Glass", Matrix-Animation, Logo       │         │ statisches Frontend (apps/web)    │
 └────────────────────────────────────────────┘         └──────────────────────────────────┘
+        │ steckbrief, projects
+        └──► api.github.com (direkt vom Browser, 30 min gecacht, Fallback content/about/)
 ```
 
 Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp-7) bekommen je einen eigenen Server-Endpunkt.
 
 ## 2. Repo-Aufbau
 
-| Pfad                    | Inhalt                                                                                                      |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `apps/web/`             | Frontend: Vite + TypeScript + xterm.js, kein UI-Framework                                                   |
-| `apps/server/`          | Backend: Fastify, Snapshot, statische Auslieferung                                                          |
-| `packages/shared/`      | Gemeinsam für Web und Server: Command-Registry, Parser, Snapshot-Typen, API-Typen                           |
-| `content/`              | Inhalte des simulierten Dateisystems. **Öffentlich**, wird komplett an jeden Besucher ausgeliefert          |
-| `e2e/`                  | Playwright: `tests/regression/` (Pipeline), `tests/review/` (Entwickler-Screenshots, nicht in der Pipeline) |
-| `docker/`               | `Dockerfile.dev` (Entwicklung, Tools), `Dockerfile.prod` (Production), `Dockerfile.playwright`              |
-| `docker-compose.yml`    | Dev- und Test-Services (`dev`, `tools`, `app`, `playwright`)                                                |
-| `docker-compose.ci.yml` | Nur CI: Docker-Layer-Cache über den GitHub-Actions-Cache                                                    |
-| `scripts/`              | Hilfsskripte (z. B. `check-ticket-ref.sh` für Commits und PRs)                                              |
-| `.githooks/`            | `commit-msg` (Ticketnummer), `pre-push` (Ticketbezug, Lint, Typecheck, Tests)                               |
-| `.github/`              | CI-Workflow, PR-Vorlage                                                                                     |
-| `assets/`               | Quellmaterial, das nicht ausgeliefert wird (z. B. Foto für das ASCII-Porträt)                               |
-| `docs/`                 | SPEC, diese Datei, Spike und Reviews                                                                        |
+| Pfad                    | Inhalt                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/`             | Frontend: Vite + TypeScript + xterm.js, kein UI-Framework                                                                                        |
+| `apps/server/`          | Backend: Fastify, Snapshot, statische Auslieferung                                                                                               |
+| `packages/shared/`      | Gemeinsam für Web und Server: Command-Registry, Parser, Snapshot-Typen, API-Typen                                                                |
+| `content/`              | Inhalte des simulierten Dateisystems. **Öffentlich**, wird komplett an jeden Besucher ausgeliefert                                               |
+| `e2e/`                  | Playwright: `tests/regression/` (Pipeline), `tests/review/` (Entwickler-Screenshots, nicht in der Pipeline)                                      |
+| `docker/`               | `Dockerfile.dev` (Entwicklung, Tools), `Dockerfile.prod` (Production), `Dockerfile.playwright`                                                   |
+| `docker-compose.yml`    | Dev- und Test-Services (`dev`, `tools`, `app`, `playwright`)                                                                                     |
+| `docker-compose.ci.yml` | Nur CI: Docker-Layer-Cache über den GitHub-Actions-Cache                                                                                         |
+| `scripts/`              | Workspace-Paket `@maxim-os/scripts`: ASCII-Porträt-Generator (`src/portrait*.ts`, `make portrait`) und `check-ticket-ref.sh` für Commits und PRs |
+| `.githooks/`            | `commit-msg` (Ticketnummer), `pre-push` (Ticketbezug, Lint, Typecheck, Tests)                                                                    |
+| `.github/`              | CI-Workflow, PR-Vorlage                                                                                                                          |
+| `assets/`               | Quellmaterial, das nicht ausgeliefert wird (z. B. `headshot/image.png` für das ASCII-Porträt)                                                    |
+| `docs/`                 | SPEC, diese Datei, Spike und Reviews                                                                                                             |
 
 ## 3. Frontend (`apps/web/src`)
 
@@ -63,10 +65,13 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 | `terminal/touch-scroll.ts`              | Eigenes Wisch-Scrolling (xterm.js scrollt auf iOS nicht)                                                                                                                                                                            |
 | `terminal/touch-debug.ts`               | Diagnose-Anzeige `?debug=touch`, nur im Dev-Server                                                                                                                                                                                  |
 | `terminal/live.ts`                      | ARIA-Live-Region für Screenreader (`textContent`, nie HTML)                                                                                                                                                                         |
+| `terminal/links.ts`                     | Klickbare Links: Klick/Tippen → Zelle → logische Zeile (auch umgebrochen) → http(s)-URL → neuer Tab mit `noopener`. Eigene Umsetzung statt xterm-Addon (das verlor Klicks durch unser Fokus-Handling)                               |
 | `shell/shell.ts`                        | Shell: Tokenizer, Registry-Lookup, Flag-Prüfung, Umleitung `>`/`>>`, Rückfragen, Completion, cwd, Speichern nach schreibenden Commands                                                                                              |
 | `shell/commands.ts`                     | Alle Command-Handler, Schlüssel = Registry-Name                                                                                                                                                                                     |
 | `shell/format.ts`                       | Ausgabeformate für `ls`, `tree`, `cat` (breit und schmal), `clean()` gegen Terminal-Injection                                                                                                                                       |
-| `shell/help.ts`                         | `help` aus der Registry (Tabelle oder gestapelt)                                                                                                                                                                                    |
+| `shell/help.ts`                         | `help` aus der Registry, gruppiert nach Wichtigkeit: Tabelle (Beschreibung bricht in ihrer Spalte um) oder gestapelt auf schmalen Screens                                                                                           |
+| `profile/github.ts`                     | GitHub-Profil und Repos direkt von `api.github.com`, 30 min im `sessionStorage` gecacht, Felder typgeprüft; `parseProfileData` für den Fallback `content/about/steckbrief.json`                                                     |
+| `profile/format.ts`                     | Ausgabe von `steckbrief` (Porträt neben bzw. über den Infos) und `projects`                                                                                                                                                         |
 | `shell/history.ts`, `shell/text.ts`     | History; Text-Helfer (Sanitizing, Farben, Umbruch)                                                                                                                                                                                  |
 | `vfs/vfs.ts`                            | **Virtuelles Dateisystem:** Pfadauflösung (`..` endet an `/`, `~` = `/`), Lesen, Schreiben, Verschieben, Kopieren, Limits                                                                                                           |
 | `vfs/workspace.ts`                      | Arbeitskopie: Snapshot + `localStorage`, neue Snapshot-Version setzt zurück, `reset`                                                                                                                                                |
@@ -89,12 +94,12 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 
 ## 4. Shared (`packages/shared/src`)
 
-| Datei         | Inhalt                                                                                                                                                                                    |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `commands.ts` | **Command-Registry**: Name, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist |
-| `parse.ts`    | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                             |
-| `snapshot.ts` | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                         |
-| `api.ts`      | `HealthResponse`, `ErrorResponse`                                                                                                                                                         |
+| Datei         | Inhalt                                                                                                                                                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commands.ts` | **Command-Registry**: Name, **Gruppe**, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist. Sortiert nach `COMMAND_GROUPS`: Über mich → Projekte und Links → Im Terminal ausprobieren → Dateien → System |
+| `parse.ts`    | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                                                                                                                                                       |
+| `snapshot.ts` | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                                                                                                                                                   |
+| `api.ts`      | `HealthResponse`, `ErrorResponse`                                                                                                                                                                                                                                                                                   |
 
 Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet, im Build `dist/`.
 
@@ -141,7 +146,7 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 ### Neuen Command hinzufügen
 
 1. Ticket anlegen (Ticket-Regel).
-2. Eintrag in `packages/shared/src/commands.ts` (Beschreibung, Usage, Beispiel, Flags, Argumente, ggf. `redirect`/`writes`/`pathOperands`).
+2. Eintrag in `packages/shared/src/commands.ts` an der richtigen Stelle seiner **Gruppe** (Reihenfolge = Wichtigkeit für Besucher; Beschreibung, Usage, Beispiel, Flags, Argumente, ggf. `redirect`/`writes`/`pathOperands`).
 3. Handler in `apps/web/src/shell/commands.ts` unter dem Registry-Namen; Ausgabe über `ctx.out`, Fehler über `ctx.shell.error` bzw. `ctx.shell.fsError`; Texte von außen mit `clean()` ausgeben.
 4. Tests zuerst: Shell-Test in `shell/shell.test.ts`, bei UI-Wirkung ein Playwright-Test (Desktop und mobil).
 5. Diese Datei aktualisieren, wenn sich Module oder Abläufe ändern.
@@ -153,6 +158,13 @@ Nur wenn der Browser es technisch nicht selbst kann, mit Begründung in der SPEC
 ### Inhalte ändern
 
 Dateien in `content/` ändern und den Server neu starten (der Snapshot entsteht beim Start). Lokale Kopien der Besucher werden bei neuer Snapshot-Version automatisch zurückgesetzt.
+
+- `content/about/`: `about.txt` (für `about`), `steckbrief.json` (Fallback, wenn GitHub nicht erreichbar ist), `portrait.txt` und `portrait-narrow.txt` (ASCII-Porträt).
+- Porträt neu erzeugen: Foto nach `assets/headshot/image.png`, dann `make portrait`.
+
+### Externe Daten im Browser
+
+GitHub wird direkt vom Browser abgefragt (CSP `connect-src` erlaubt `https://api.github.com`). Immer: Timeout, Cache, Fallback aus `content/`, Felder prüfen und bei der Ausgabe mit `clean()` filtern. In E2E-Tests per `page.route` abfangen.
 
 ## 9. Pflege dieser Datei
 

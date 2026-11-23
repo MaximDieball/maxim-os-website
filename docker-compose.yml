@@ -16,6 +16,7 @@ x-node: &node
     - nm-web:/app/apps/web/node_modules
     - nm-server:/app/apps/server/node_modules
     - nm-e2e:/app/e2e/node_modules
+    - nm-scripts:/app/scripts/node_modules
 
 services:
   # make dev: Vite (5173, im LAN erreichbar) + Fastify (3000) mit Hot-Reload.
@@ -90,3 +91,4 @@ volumes:
   nm-web:
   nm-server:
   nm-e2e:
+  nm-scripts:

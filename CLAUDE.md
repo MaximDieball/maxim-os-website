@@ -68,7 +68,7 @@ Durch die Client-first-Architektur ist der Server nur noch ein kleines Angriffsz
 - **Regressionstests (Pipeline):** Nur `toHaveScreenshot()`-Tests und funktionale UI-Tests, die prüfen, dass sich nichts verändert hat, was unverändert bleiben soll.
 - **Playwright-Projekte:** mindestens Desktop (1280×800) und mobiles Hochformat (z. B. 390×844 und 360×640). Die mobilen Tests simulieren die offene Tastatur, indem sie die sichtbare Höhe verkleinern (ca. 40–50 %).
 - Vor jedem Push muss die Pipeline-Checkliste lokal grün sein: Lint, Typecheck, Vitest, Playwright-Regression, Build (alles per Docker, `make ci`).
-- Die Command-Registry (Name, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumente) ist die einzige Quelle für `help` und für die Flag-Allowlist.
+- Die Command-Registry (Name, Gruppe, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumente) ist die einzige Quelle für `help` und für die Flag-Allowlist. Sie ist nach Wichtigkeit für Besucher sortiert (Gruppen siehe SPEC, `help`).
 - **Architektur-Doku pflegen:** `docs/ARCHITECTURE.md` beschreibt die Struktur der Website für Entwickler (Module, Datenflüsse, Endpunkte, Build, Tests, Rezepte). **Vor jedem Merge** prüfen, ob der PR daran etwas ändert, und die Datei im selben PR aktualisieren. Sie beschreibt immer den Stand von `main`.
 - Commit-Messages kurz und aussagekräftig, kleine Commits, nach jedem Meilenstein ein Commit/Tag.
 

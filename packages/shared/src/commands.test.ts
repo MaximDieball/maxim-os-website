@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMMANDS, findCommand } from './commands.ts';
+import { COMMAND_GROUPS, COMMANDS, findCommand } from './commands.ts';
 
 describe('command registry', () => {
   it('contains help and clear', () => {
@@ -39,5 +39,26 @@ describe('command registry', () => {
     expect(findCommand('constructor')).toBeUndefined();
     expect(findCommand('__proto__')).toBeUndefined();
     expect(findCommand('')).toBeUndefined();
+  });
+});
+
+describe('command order (#82)', () => {
+  it('starts with steckbrief', () => {
+    expect(COMMANDS[0]?.name).toBe('steckbrief');
+  });
+
+  it('is sorted by group importance for visitors', () => {
+    const order = COMMAND_GROUPS.map((g) => g.id);
+    const ranks = COMMANDS.map((c) => order.indexOf(c.group));
+    expect(ranks.every((r) => r >= 0)).toBe(true);
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+  });
+
+  it('puts links before terminal projects, files and system commands', () => {
+    const order = COMMAND_GROUPS.map((g) => g.id);
+    expect(order).toEqual(['me', 'links', 'play', 'files', 'system']);
+    expect(findCommand('projects')?.group).toBe('links');
+    expect(findCommand('help')?.group).toBe('system');
+    expect(findCommand('ls')?.group).toBe('files');
   });
 });

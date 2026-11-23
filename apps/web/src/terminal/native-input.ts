@@ -24,6 +24,9 @@ export function createNativeInput(
   if (textarea) {
     textarea.readOnly = true;
     textarea.tabIndex = -1;
+    // xterm.js fokussiert seine Textarea bei jedem Klick. Getippt wird nur ins Input:
+    // den Fokus gleich dorthin geben, statt ihn hin und her springen zu lassen.
+    textarea.focus = () => input.focus({ preventScroll: true });
   }
   term.element?.addEventListener('focusin', () => input.focus());
 
@@ -220,7 +223,13 @@ export function createNativeInput(
     else draw();
   });
   input.addEventListener('focus', () => draw());
-  input.addEventListener('blur', () => draw(state(false)));
+  // Ein Klick ins Terminal nimmt dem Input kurz den Fokus, der Klick-Handler holt ihn zurück.
+  // Erst neu zeichnen, wenn der Fokus wirklich weg ist (vermeidet Flackern des Cursors).
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement !== input) draw(state(false));
+    }, 150);
+  });
   // Caret per Pfeiltasten, Home/End oder Antippen verschoben.
   document.addEventListener('selectionchange', () => {
     if (document.activeElement === input) draw();

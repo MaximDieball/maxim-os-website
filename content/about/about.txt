@@ -1,0 +1,15 @@
+MAXIM OS
+an ai coding project
+
+Das hier ist meine persönliche Website, gebaut als Terminal.
+Statt durch Seiten zu klicken, tippst du Commands.
+
+Gebaut mit KI-Agenten: geplant, getestet und umgesetzt in kleinen
+Meilensteinen, mit Tickets, Code-Reviews und Tests.
+
+  steckbrief   wer ich bin
+  projects     woran ich arbeite
+  help         alle Commands
+
+Alles hier läuft in deinem Browser. Du kannst Dateien anlegen,
+verschieben und löschen; 'reset' stellt das Original wieder her.

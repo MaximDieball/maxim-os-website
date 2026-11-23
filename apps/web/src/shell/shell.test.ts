@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COMMANDS, type Snapshot } from '@maxim-os/shared';
+import type { GithubData } from '../profile/github.ts';
 import { Workspace, type KeyValueStore } from '../vfs/workspace.ts';
 import { formatHelp } from './help.ts';
 import { History } from './history.ts';
@@ -58,8 +59,24 @@ describe('History', () => {
 });
 
 describe('formatHelp', () => {
+  it('shows the groups in order of importance with steckbrief first', () => {
+    const lines = formatHelp(COMMANDS, 120).map(stripAnsi);
+    const titles = ['Über mich', 'Projekte und Links', 'Dateien', 'System'];
+    const at = titles.map((t) => lines.indexOf(t));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // Tabelle oder gestapelt: steckbrief kommt vor projects, ls und help
+    const first = (name: string) => lines.findIndex((l) => l.trimStart().startsWith(name));
+    expect(first('steckbrief')).toBeGreaterThan(-1);
+    expect(first('steckbrief')).toBeLessThan(first('projects'));
+    expect(first('projects')).toBeLessThan(first('ls'));
+    expect(first('ls')).toBeLessThan(first('help'));
+    expect(lines).not.toContain('Im Terminal ausprobieren'); // leer, solange es keine Spiele gibt
+  });
+
   it('lists every registry command with description, usage and example', () => {
-    const text = formatHelp(COMMANDS, 120).join('\n');
+    // Sehr breit, damit keine Beschreibung in der Tabelle umbricht.
+    const text = formatHelp(COMMANDS, 220).map(stripAnsi).join('\n');
     for (const c of COMMANDS) {
       expect(text).toContain(c.name);
       expect(text).toContain(c.description);
@@ -72,6 +89,14 @@ describe('formatHelp', () => {
     for (const l of lines) expect(stripAnsi(l).length).toBeLessThanOrEqual(40);
     expect(lines.join('\n')).toMatch(/Beispiel: +help/);
   });
+  it('uses a table on desktop widths and wraps long descriptions inside it', () => {
+    const lines = formatHelp(COMMANDS, 120).map(stripAnsi);
+    expect(lines.some((l) => /COMMAND +BESCHREIBUNG +USAGE +BEISPIEL/.test(l))).toBe(true);
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(120);
+    // kompakt: deutlich kürzer als die gestapelte Variante
+    expect(lines.length).toBeLessThan(formatHelp(COMMANDS, 40).length / 2);
+  });
+
   it('fits the wide layout into the given width', () => {
     for (const l of formatHelp(COMMANDS, 120)) expect(stripAnsi(l).length).toBeLessThanOrEqual(120);
   });
@@ -351,5 +376,91 @@ describe('completion', () => {
   it('does not complete paths for commands without path arguments', async () => {
     const { sh } = setup();
     expect(await sh.complete('pwd pro')).toBe('pwd pro');
+  });
+});
+
+describe('profile commands', () => {
+  const GH: GithubData = {
+    source: 'github',
+    profile: { login: 'MaximDieball', name: 'Maxim', htmlUrl: 'https://github.com/MaximDieball' },
+    repos: [{ name: 'maxim-os-website', url: 'https://github.com/MaximDieball/maxim-os-website' }],
+  };
+  const FALLBACK_SNAP: Snapshot = {
+    version: 'v2',
+    root: {
+      ...SNAP.root,
+      children: [
+        ...SNAP.root.children,
+        {
+          type: 'dir',
+          name: 'about',
+          mtime: T,
+          children: [
+            {
+              type: 'file',
+              name: 'steckbrief.json',
+              mtime: T,
+              size: 0,
+              text: JSON.stringify({
+                profile: { login: 'Offline', htmlUrl: 'https://github.com/Offline' },
+                repos: [],
+              }),
+            },
+            {
+              type: 'file',
+              name: 'portrait-narrow.txt',
+              mtime: T,
+              size: 0,
+              text: '#####\n#####\n',
+            },
+            { type: 'file', name: 'about.txt', mtime: T, size: 0, text: 'Über MAXIM OS\n' },
+          ],
+        },
+      ],
+    },
+  };
+
+  it('steckbrief uses GitHub data', async () => {
+    const { out, lines } = fakeOutput(40);
+    const sh = new Shell(out, Workspace.open(FALLBACK_SNAP, memoryStore()), {
+      github: async () => GH,
+    });
+    await sh.execute('steckbrief');
+    expect(lines.join('\n')).toContain('Maxim');
+    expect(lines.join('\n')).toContain('#####');
+  });
+
+  it('steckbrief falls back to content/about/steckbrief.json', async () => {
+    const { out, lines } = fakeOutput(40);
+    const sh = new Shell(out, Workspace.open(FALLBACK_SNAP, memoryStore()), {
+      github: async () => undefined,
+    });
+    await sh.execute('steckbrief');
+    expect(lines.join('\n')).toContain('Offline');
+    expect(lines.join('\n')).toContain('gespeicherte Daten');
+  });
+
+  it('steckbrief reports missing data', async () => {
+    const { sh, lines } = setup();
+    await sh.execute('steckbrief');
+    expect(lines.at(-1)).toContain('steckbrief: Daten nicht verfügbar');
+  });
+
+  it('projects lists repos with links', async () => {
+    const { out, lines } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), { github: async () => GH });
+    await sh.execute('projects');
+    expect(lines.join('\n')).toContain('https://github.com/MaximDieball/maxim-os-website');
+  });
+
+  it('about prints about.txt, whoami says guest, history numbers the input', async () => {
+    const { out, lines } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(FALLBACK_SNAP, memoryStore()));
+    await sh.execute('about');
+    expect(lines).toContain('Über MAXIM OS');
+    await sh.execute('whoami');
+    expect(lines).toContain('guest');
+    await sh.execute('history');
+    expect(lines.slice(-3)).toEqual(['   1  about', '   2  whoami', '   3  history']);
   });
 });
