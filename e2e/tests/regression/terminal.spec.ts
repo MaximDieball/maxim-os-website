@@ -6,6 +6,7 @@ import {
   run,
   terminalOutput,
   visibleLines,
+  clickText,
 } from '../helpers.ts';
 
 test.describe('terminal', () => {
@@ -13,7 +14,7 @@ test.describe('terminal', () => {
     await openTerminal(page);
     const out = terminalOutput(page);
     await expect(out).toContainText('an ai coding project');
-    await expect(out).toContainText("'help'");
+    await expect(out).toContainText("'help --short'");
     await expect(page).toHaveScreenshot('startscreen.png');
   });
 
@@ -28,6 +29,24 @@ test.describe('terminal', () => {
     }
     await expect(terminalOutput(page)).toContainText(HELP_END);
     await expect(page).toHaveScreenshot('help.png');
+  });
+
+  test('help --short fits the screen and leads to details by click (#93)', async ({ page }) => {
+    await openTerminal(page);
+    // Der Vorschlag im Startscreen ist klickbar
+    await clickText(page, 'help');
+    const live = page.locator('#live');
+    await expect(live).toContainText('Kurzfassung');
+    // Desktop: der Anfang ("Über mich") bleibt sichtbar
+    if ((page.viewportSize()?.width ?? 0) >= 1000) {
+      await expect.poll(async () => (await visibleLines(page)).join('\n')).toContain('Über mich');
+    }
+    // Ein Eintrag aus der letzten Zeile (auch auf kleinen Screens sichtbar)
+    await clickText(page, 'history');
+    await expect(live).toContainText('Usage');
+    await expect(live).toContainText('Zeigt deine letzten Eingaben.');
+    await expect(live).toContainText('Beispiel');
+    await expect(page).toHaveScreenshot('help-command.png');
   });
 
   test('prompt and typed text sit inline right after the output', async ({ page }) => {
@@ -74,7 +93,9 @@ test.describe('terminal', () => {
   test('unknown command', async ({ page }) => {
     await openTerminal(page);
     await run(page, 'sudo');
-    await expect(terminalOutput(page)).toContainText("command not found: sudo. Tippe 'help'.");
+    await expect(terminalOutput(page)).toContainText(
+      "command not found: sudo. Tippe 'help --short'.",
+    );
   });
 
   test('clear and ctrl+l empty the screen', async ({ page }) => {
@@ -158,7 +179,7 @@ test.describe('mobile with open keyboard', () => {
     // Die Meldung kann umbrechen: Zeilen vor dem Prompt ohne Leerzeichen zusammensetzen.
     await expect
       .poll(async () => (await visibleLines(page)).slice(-3, -1).join('').replace(/\s+/g, ''))
-      .toContain("commandnotfound:cmd11.Tippe'help'.");
+      .toContain("commandnotfound:cmd11.Tippe'help--short'.");
     await expect(page.locator('#cmd')).toBeFocused();
   });
 

@@ -3,6 +3,7 @@ import '@fontsource/jetbrains-mono/700.css';
 import './styles.css';
 import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
+import { withSuggestions } from './shell/suggest.ts';
 import { FS_UNAVAILABLE, Shell } from './shell/shell.ts';
 import { style } from './shell/text.ts';
 import { createLiveRegion } from './terminal/live.ts';
@@ -94,7 +95,8 @@ async function boot(): Promise<void> {
 
   // Startscreen sofort rendern: die Animation läuft darüber und gibt ihn frei.
   view.fit();
-  view.output.print(startscreenLines(view.term.cols, theme.logo));
+  const start = withSuggestions(startscreenLines(view.term.cols, theme.logo));
+  view.output.print(start.lines, start.actions);
   editor.start();
   document.documentElement.dataset.ready = 'true';
   void workspace.then((ws) => {

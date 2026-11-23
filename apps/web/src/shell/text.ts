@@ -24,7 +24,8 @@ export function truncate(text: string, max: number): string {
 export function wrap(text: string, width: number): string[] {
   const out: string[] = [];
   let line = '';
-  for (const word of text.split(/\s+/).filter(Boolean)) {
+  // Geschützte Leerzeichen (\u00a0) trennen nicht, z. B. in 'help\u00a0--short'.
+  for (const word of text.split(/[ \t\n\r\f\v]+/).filter(Boolean)) {
     if (!line) line = word;
     else if (line.length + 1 + word.length <= width) line += ` ${word}`;
     else {
@@ -44,6 +45,11 @@ export const style = {
   bold: (s: string) => `\x1b[1m${s}\x1b[22m`,
   dim: (s: string) => `\x1b[2m${s}\x1b[22m`,
   underline: (s: string) => `\x1b[4m${s}\x1b[24m`,
+  /** Klickbarer Command (#93): gelb und unterstrichen, hebt sich auch aus gedimmtem Text ab. */
+  command: (s: string, dimAfter = false) =>
+    `\x1b[22;4;33m${s}\x1b[24;39m${dimAfter ? '\x1b[2m' : ''}`,
+  /** Klickbarer Link: blau und unterstrichen. */
+  link: (s: string) => `\x1b[4;34m${s}\x1b[24;39m`,
   red: (s: string) => `\x1b[31m${s}\x1b[39m`,
   green: (s: string) => `\x1b[32m${s}\x1b[39m`,
   yellow: (s: string) => `\x1b[33m${s}\x1b[39m`,

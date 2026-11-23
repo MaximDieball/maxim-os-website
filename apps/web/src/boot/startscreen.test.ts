@@ -6,7 +6,7 @@ describe('startscreen', () => {
   it('shows tagline and hint', () => {
     const text = startscreenLines(100).map(stripAnsi).join('\n');
     expect(text).toContain(TAGLINE);
-    expect(text).toContain("'help'");
+    expect(text.replace(/\u00a0/g, ' ')).toContain("'help --short'");
     expect(text).toContain("'steckbrief'");
   });
 
@@ -31,6 +31,6 @@ describe('startscreen', () => {
 
   it('keeps the hint text intact when wrapped', () => {
     const text = startscreenLines(40).map(stripAnsi).join(' ').replace(/\s+/g, ' ');
-    expect(text).toContain(HINT);
+    expect(text).toContain(HINT.replace(/\u00a0/g, ' '));
   });
 });

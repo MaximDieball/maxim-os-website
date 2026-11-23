@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { COMMANDS, type Snapshot } from '@maxim-os/shared';
+import { COMMANDS, findCommand, type Snapshot } from '@maxim-os/shared';
 import type { GithubData } from '../profile/github.ts';
 import { Workspace, type KeyValueStore } from '../vfs/workspace.ts';
-import { formatHelp } from './help.ts';
+import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
+import { suggestionsIn } from './suggest.ts';
 import { History } from './history.ts';
 import { sanitizeInput, stripAnsi } from './text.ts';
-import { Shell, type ShellOutput } from './shell.ts';
+import { Shell, type LineAction, type ShellOutput } from './shell.ts';
 
 function fakeOutput(cols = 100) {
   const lines: string[] = [];
@@ -60,7 +61,7 @@ describe('History', () => {
 
 describe('formatHelp', () => {
   it('shows the groups in order of importance with steckbrief first', () => {
-    const lines = formatHelp(COMMANDS, 120).map(stripAnsi);
+    const lines = formatHelp(COMMANDS, 120).lines.map(stripAnsi);
     const titles = ['Über mich', 'Projekte und Links', 'Dateien', 'System'];
     const at = titles.map((t) => lines.indexOf(t));
     expect(at.every((i) => i >= 0)).toBe(true);
@@ -76,7 +77,7 @@ describe('formatHelp', () => {
 
   it('lists every registry command with description, usage and example', () => {
     // Sehr breit, damit keine Beschreibung in der Tabelle umbricht.
-    const text = formatHelp(COMMANDS, 220).map(stripAnsi).join('\n');
+    const text = formatHelp(COMMANDS, 220).lines.map(stripAnsi).join('\n');
     for (const c of COMMANDS) {
       expect(text).toContain(c.name);
       expect(text).toContain(c.description);
@@ -85,20 +86,110 @@ describe('formatHelp', () => {
     expect(text).toContain('cls');
   });
   it('uses a stacked layout that fits narrow screens', () => {
-    const lines = formatHelp(COMMANDS, 40);
+    const lines = formatHelp(COMMANDS, 40).lines;
     for (const l of lines) expect(stripAnsi(l).length).toBeLessThanOrEqual(40);
-    expect(lines.join('\n')).toMatch(/Beispiel: +help/);
+    expect(lines.join('\n')).toMatch(/Beispiel: +help --short/);
   });
   it('uses a table on desktop widths and wraps long descriptions inside it', () => {
-    const lines = formatHelp(COMMANDS, 120).map(stripAnsi);
+    const lines = formatHelp(COMMANDS, 120).lines.map(stripAnsi);
     expect(lines.some((l) => /COMMAND +BESCHREIBUNG +USAGE +BEISPIEL/.test(l))).toBe(true);
     for (const l of lines) expect(l.length).toBeLessThanOrEqual(120);
     // kompakt: deutlich kürzer als die gestapelte Variante
-    expect(lines.length).toBeLessThan(formatHelp(COMMANDS, 40).length / 2);
+    expect(lines.length).toBeLessThan(formatHelp(COMMANDS, 40).lines.length / 2);
+  });
+
+  it('makes every command clickable to open its details', () => {
+    const out = formatHelp(COMMANDS, 120);
+    const commands = out.actions
+      .flat()
+      .filter(Boolean)
+      .map((a) => a!.command);
+    for (const c of COMMANDS) expect(commands).toContain(`help ${c.name}`);
+    expect(commands).toContain('help --short');
   });
 
   it('fits the wide layout into the given width', () => {
-    for (const l of formatHelp(COMMANDS, 120)) expect(stripAnsi(l).length).toBeLessThanOrEqual(120);
+    for (const l of formatHelp(COMMANDS, 120).lines)
+      expect(stripAnsi(l).length).toBeLessThanOrEqual(120);
+  });
+});
+
+describe('help --short and help <command> (#93)', () => {
+  it('explains help and fits on a desktop screen', () => {
+    for (const cols of [120, 40]) {
+      const out = formatHelpShort(COMMANDS, cols);
+      const lines = out.lines.map(stripAnsi);
+      expect(lines.length).toBeLessThanOrEqual(26);
+      for (const l of lines) expect(l.length).toBeLessThanOrEqual(cols);
+      const text = lines.join(' ').replace(/\u00a0/g, ' ');
+      expect(text).toContain('help <command>');
+      expect(text).toContain("'help'");
+      // steckbrief steht vor ls und help, alle Commands sind klickbar
+      expect(text.indexOf('steckbrief')).toBeLessThan(text.indexOf(' ls '));
+      const commands = out.actions
+        .flat()
+        .filter(Boolean)
+        .map((a) => a!.command);
+      for (const c of COMMANDS) expect(commands).toContain(`help ${c.name}`);
+      expect(commands).toContain('help');
+    }
+  });
+
+  it('places the click ranges exactly on the names in compact rows', () => {
+    const out = formatHelpShort(COMMANDS, 120);
+    const i = out.lines.findIndex((l) => /\bmkdir\b/.test(stripAnsi(l)));
+    const plainLine = stripAnsi(out.lines[i]!);
+    for (const a of out.actions[i] as LineAction[]) {
+      expect(plainLine.slice(a.from, a.to)).toBe(a.command.replace('help ', ''));
+    }
+  });
+
+  it('shows details of one command', () => {
+    const out = formatCommandHelp(findCommand('ls')!, 80);
+    const text = out.lines.map(stripAnsi).join('\n');
+    for (const s of ['Usage', 'ls [-l] [-a]', 'Beispiel', '-l  ausführliche Liste', 'Dateien']) {
+      expect(text).toContain(s);
+    }
+    const commands = out.actions
+      .flat()
+      .filter(Boolean)
+      .map((a) => a!.command);
+    expect(commands).toContain(findCommand('ls')!.example);
+    expect(commands).toContain('help --short');
+    // Beispiele, die etwas verändern, sind nicht klickbar
+    const rm = formatCommandHelp(findCommand('rm')!, 80).actions.flat().filter(Boolean);
+    expect(rm.map((a) => a!.command)).not.toContain(findCommand('rm')!.example);
+  });
+
+  it('help <command>, help -s, aliases and unknown names in the shell', async () => {
+    const { sh, lines } = setup();
+    await sh.execute('help --short');
+    expect(lines.join('\n')).toContain('Kurzfassung');
+    await sh.execute('help cls');
+    expect(lines.join('\n')).toMatch(/^clear$/m);
+    await sh.execute('help nope');
+    expect(lines.join('\n')).toContain('help: nope: Unbekannter Command.');
+    expect(await sh.complete('help ste')).toBe('help steckbrief ');
+  });
+});
+
+describe('clickable suggestions (#93)', () => {
+  it('finds quoted commands with their columns', () => {
+    const line = "Tippe 'help\u00a0--short' oder 'steckbrief'. 'project <name>' 'foo'";
+    expect(suggestionsIn(`\x1b[2m${line}\x1b[22m`)).toEqual([
+      { command: 'help --short', from: 6, to: 20 },
+      { command: 'steckbrief', from: 26, to: 38 },
+    ]);
+  });
+
+  it('only the own hint of command not found is clickable', async () => {
+    const printed: unknown[] = [];
+    const { out } = fakeOutput(120);
+    out.print = (_l, a) => void printed.push(a);
+    const sh = new Shell(out, Workspace.open(SNAP, memoryStore()));
+    await sh.execute('"\'reset\'"');
+    const actions = (printed.at(-1) as LineAction[][])[0]!;
+    expect(actions.map((a) => a.command)).toEqual(['help --short']);
   });
 });
 
@@ -159,11 +250,11 @@ describe('Shell basics', () => {
   it('reports unknown commands without echoing escape sequences', async () => {
     const { sh, lines } = setup();
     await sh.execute('rm-rf');
-    expect(lines).toContain("command not found: rm-rf. Tippe 'help'.");
+    expect(lines).toContain("command not found: rm-rf. Tippe 'help\u00a0--short'.");
     await sh.execute('\x1b]0;pwned\x07evil');
     expect(lines.join('')).not.toContain('\x1b');
     await sh.execute('a'.repeat(200));
-    expect(lines.at(-1)!.length).toBeLessThan(80);
+    expect(lines.at(-1)!.length).toBeLessThan(90);
   });
 
   it('rejects unknown flags and wrong argument counts', async () => {
@@ -188,7 +279,7 @@ describe('Shell basics', () => {
   it('does not treat prototype keys as commands', async () => {
     const { sh, lines } = setup();
     await sh.execute('constructor');
-    expect(lines).toContain("command not found: constructor. Tippe 'help'.");
+    expect(lines).toContain("command not found: constructor. Tippe 'help\u00a0--short'.");
   });
 
   it('says when the file system is not available', async () => {
@@ -451,7 +542,7 @@ describe('profile commands', () => {
     const { out, lines } = fakeOutput(80);
     out.print = (l, a) => {
       lines.push(...l.map(stripAnsi));
-      a?.forEach((x) => x && actions.push(x.command));
+      a?.flat().forEach((x) => x && actions.push(x.command));
     };
     const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), { github: async () => GH });
     await sh.execute('projects');

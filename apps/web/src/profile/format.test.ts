@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { stripAnsi } from '../shell/text.ts';
 import { formatProject, formatProjects, formatSteckbrief, type Output } from './format.ts';
+import type { LineAction } from '../shell/shell.ts';
 import type { GithubData } from './github.ts';
 
 const DATA: GithubData = {
@@ -38,9 +39,13 @@ const PORTRAIT = {
 };
 const plain = (o: Output | string[]) => (Array.isArray(o) ? o : o.lines).map(stripAnsi);
 /** Klickbare Zeilen als [Text, Command]. */
+const actionsAt = (o: Output, i: number): LineAction[] => {
+  const a = o.actions[i];
+  return a === undefined ? [] : Array.isArray(a) ? [...a] : [a as LineAction];
+};
 const clickable = (o: Output) =>
   o.lines.flatMap((l, i): [string, string][] =>
-    o.actions[i] ? [[stripAnsi(l), o.actions[i]!.command]] : [],
+    actionsAt(o, i).map((a) => [stripAnsi(l), a.command]),
   );
 
 describe('formatSteckbrief', () => {
@@ -114,6 +119,7 @@ describe('formatSteckbrief', () => {
       expect(clickable(out).map(([, c]) => c)).toEqual([
         'project maxim-os-website',
         'project ESP-32-based-physical-password-manager',
+        'projects',
       ]);
     }
   });
@@ -121,8 +127,9 @@ describe('formatSteckbrief', () => {
   it('only makes the info column clickable next to the portrait', () => {
     const out = formatSteckbrief(DATA, PORTRAIT, 120);
     const i = out.actions.findIndex(Boolean);
-    expect(out.actions[i]!.from).toBeGreaterThanOrEqual(20);
-    expect(stripAnsi(out.lines[i]!).slice(out.actions[i]!.from)).toContain('maxim-os-website');
+    const a = actionsAt(out, i)[0]!;
+    expect(a.from).toBeGreaterThanOrEqual(20);
+    expect(stripAnsi(out.lines[i]!).slice(a.from)).toContain('maxim-os-website');
   });
 });
 

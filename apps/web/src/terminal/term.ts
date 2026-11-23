@@ -80,7 +80,12 @@ export function createTerminal(
         // Zeilenweise schreiben und vor jeder klickbaren Zeile einen Marker setzen.
         lines.forEach((line, i) => {
           const action = lineActions[i];
-          if (action) term.write('', () => actions.add(term.registerMarker(0), action));
+          if (action) {
+            term.write('', () => {
+              const marker = term.registerMarker(0);
+              for (const a of Array.isArray(action) ? action : [action]) actions.add(marker, a);
+            });
+          }
           term.write(`${line}\r\n`);
         });
         term.write('', () => term.scrollToBottom());

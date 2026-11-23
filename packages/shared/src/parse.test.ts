@@ -108,6 +108,17 @@ describe('parseArgs', () => {
     expect(parseArgs(spec('cat'), ['-n', 'x']).ok).toBe(false);
   });
 
+  it('accepts registered long options as their short flag (#93)', () => {
+    expect(parseArgs(spec('help'), ['--short'])).toEqual({
+      ok: true,
+      flags: { s: true },
+      operands: [],
+    });
+    expect(parseArgs(spec('help'), ['-s'])).toMatchObject({ ok: true, flags: { s: true } });
+    expect(parseArgs(spec('help'), ['ls'])).toMatchObject({ ok: true, operands: ['ls'] });
+    expect(parseArgs(spec('help'), ['--shorter']).ok).toBe(false);
+  });
+
   it('treats everything after -- as operands', () => {
     expect(parseArgs(spec('cat'), ['--', '-weird.txt'])).toEqual({
       ok: true,

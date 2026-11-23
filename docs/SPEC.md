@@ -107,7 +107,7 @@ Der erste Screen enthält:
 
 - oben einen ASCII-Schriftzug **"MAXIM OS"**
 - darunter die Unterschrift **"an ai coding project"**
-- einen Hinweis, `help` oder `steckbrief` auszuführen
+- einen Hinweis, `help --short` oder `steckbrief` auszuführen (beide klickbar)
 
 Die Animation ist überspringbar (beliebige Taste/Klick) und respektiert `prefers-reduced-motion`. Der Snapshot wird parallel geladen. Schlägt das fehl, erscheint ein Hinweis; Commands ohne Dateisystem (`help`, `clear`, ...) funktionieren trotzdem.
 
@@ -119,7 +119,12 @@ Alle Commands stehen in einer zentralen **Command-Registry**. Jeder Eintrag enth
 
 ### help
 
-Gibt eine Liste aller Commands aus, jeweils mit Beschreibung, Benutzung und Beispiel.
+Gibt eine Liste aller Commands aus, jeweils mit Beschreibung, Benutzung und Beispiel. Dazu (#93):
+
+- `help -s` / `help --short`: Kurzfassung, die auf einen Desktop-Bildschirm passt. Oben steht kurz, wie `help` funktioniert (`help <command>` für Details, `help` für alles). Wichtige Gruppen zeigen Name und einzeilige Beschreibung, „Dateien“ und „System“ nur die Namen.
+- `help <command>` (auch Aliase): Beschreibung, Usage, Beispiel, Flags, Aliase und Gruppe. Das Beispiel ist klickbar, wenn es nichts verändert.
+- Startscreen und Hinweise schlagen `help --short` vor. Vorgeschlagene Commands sind **klickbar** und führen den Command aus; jeder Eintrag in `help` öffnet `help <command>`.
+- Klickbares ist immer sichtbar markiert: unterstrichen, Commands gelb, Links blau, Einträge cyan.
 
 **Reihenfolge nach Wichtigkeit für Besucher** (#82), als Gruppen mit Überschrift:
 
@@ -181,7 +186,7 @@ Zeigt einen Steckbrief von mir. Die Daten kommen von GitHub (Profil, Repos): Der
 
 ### Weitere Basis-Commands (clientseitig)
 
-`clear`, `projects` (Liste aller meiner Projekte; ein Klick auf ein Projekt führt `project <name>` aus, statt direkt auf eine externe Seite zu springen), `project <name>` (Projektseite: Name, Beschreibung, Sprache, Sterne, letztes Update, Links zu GitHub und Website, darunter die README als Text; Namen per Tab vervollständigbar), `about`, `whoami`, `history`. Im `steckbrief` stehen ebenfalls alle Projekte als klickbare Liste, dazu eigene Angaben aus `content/about/steckbrief.json` (`facts`, z. B. Studium: Angewandte Informatik an der Nordakademie, dualer Student). Unbekannte Commands geben `command not found: <name>. Tippe 'help'.` aus.
+`clear`, `projects` (Liste aller meiner Projekte; ein Klick auf ein Projekt führt `project <name>` aus, statt direkt auf eine externe Seite zu springen), `project <name>` (Projektseite: Name, Beschreibung, Sprache, Sterne, letztes Update, Links zu GitHub und Website, darunter die README als Text; Namen per Tab vervollständigbar), `about`, `whoami`, `history`. Im `steckbrief` stehen ebenfalls alle Projekte als klickbare Liste, dazu eigene Angaben aus `content/about/steckbrief.json` (`facts`, z. B. Studium: Angewandte Informatik an der Nordakademie, dualer Student). Unbekannte Commands geben `command not found: <name>. Tippe 'help --short'.` aus (der Vorschlag ist klickbar).
 
 ### Terminal-UX
 
