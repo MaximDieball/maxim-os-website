@@ -11,6 +11,7 @@ import { bindQuickKeys } from './terminal/quickkeys.ts';
 import { createTerminal } from './terminal/term.ts';
 import { bindTouchScroll } from './terminal/touch-scroll.ts';
 import { trackVisualViewport } from './terminal/viewport.ts';
+import { THEME as theme } from './theme/theme.ts';
 import { loadWorkspace } from './vfs/load.ts';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -30,15 +31,16 @@ async function boot(): Promise<void> {
 
   const matrix = runMatrix(byId<HTMLCanvasElement>('matrix'), {
     skip: shouldSkipBoot(location.search),
+    colors: theme.matrix,
   });
 
   // xterm.js misst Zeichen beim Öffnen: Schrift vorher laden.
   await Promise.allSettled([
-    document.fonts.load('15px "JetBrains Mono"'),
-    document.fonts.load('bold 15px "JetBrains Mono"'),
+    document.fonts.load(`15px "${theme.font.face}"`),
+    document.fonts.load(`bold 15px "${theme.font.face}"`),
   ]);
 
-  const view = createTerminal(termEl, createLiveRegion(byId('live')));
+  const view = createTerminal(termEl, createLiveRegion(byId('live')), theme);
   const editor = createNativeInput(form, input, view, (out) => new Shell(out, workspace));
 
   trackVisualViewport(app, () => {
@@ -80,7 +82,7 @@ async function boot(): Promise<void> {
 
   // Startscreen sofort rendern: die Animation läuft darüber und gibt ihn frei.
   view.fit();
-  view.output.print(startscreenLines(view.term.cols));
+  view.output.print(startscreenLines(view.term.cols, theme.logo));
   editor.start();
   document.documentElement.dataset.ready = 'true';
   void workspace.then((ws) => {

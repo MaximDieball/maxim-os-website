@@ -155,9 +155,10 @@ test.describe('mobile with open keyboard', () => {
     await openTerminal(page);
     for (let i = 0; i < 12; i++) await run(page, `cmd${i}`);
     await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
+    // Die Meldung kann umbrechen: Zeilen vor dem Prompt ohne Leerzeichen zusammensetzen.
     await expect
-      .poll(async () => (await visibleLines(page)).at(-2))
-      .toContain("command not found: cmd11. Tippe 'help'.");
+      .poll(async () => (await visibleLines(page)).slice(-3, -1).join('').replace(/\s+/g, ''))
+      .toContain("commandnotfound:cmd11.Tippe'help'.");
     await expect(page.locator('#cmd')).toBeFocused();
   });
 
