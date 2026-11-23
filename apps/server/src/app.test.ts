@@ -12,11 +12,23 @@ afterEach(async () => {
 });
 
 describe('server app', () => {
-  it('answers the health check', async () => {
-    app = await buildApp({ logger: false });
+  it('answers the health check with the build version', async () => {
+    app = await buildApp({ logger: false, version: '0123abcd' });
     const res = await app.inject({ method: 'GET', url: '/api/health' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'ok' });
+    expect(res.json()).toEqual({ status: 'ok', version: '0123abcd' });
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it('reports "dev" without a build version', async () => {
+    app = await buildApp({ logger: false });
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.json()).toEqual({ status: 'ok', version: 'dev' });
+  });
+
+  it('only accepts a sane version string', async () => {
+    app = await buildApp({ logger: false, version: 'x\u001b[31m<script>' });
+    expect((await app.inject({ method: 'GET', url: '/api/health' })).json().version).toBe('dev');
   });
 
   it('returns a generic 404 for unknown api routes', async () => {
