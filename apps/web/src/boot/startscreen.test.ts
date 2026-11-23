@@ -14,6 +14,21 @@ describe('startscreen', () => {
     for (const l of startscreenLines(cols)) expect(stripAnsi(l).length).toBeLessThanOrEqual(cols);
   });
 
+  it('centers MAXIM and OS on narrow screens', () => {
+    const lines = startscreenLines(40).map(stripAnsi);
+    const logo = lines.slice(1, lines.indexOf('', 1));
+    expect(logo.length).toBeGreaterThan(0);
+    for (const l of logo.filter((x) => x.trim())) {
+      const left = l.length - l.trimStart().length;
+      expect(left, l).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the logo left-aligned on wide screens', () => {
+    const lines = startscreenLines(140).map(stripAnsi);
+    expect(lines[1]!.length - lines[1]!.trimStart().length).toBeLessThanOrEqual(2);
+  });
+
   it('keeps the hint text intact when wrapped', () => {
     const text = startscreenLines(40).map(stripAnsi).join(' ').replace(/\s+/g, ' ');
     expect(text).toContain(HINT);
