@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit';
+import { bindLinks } from './links.ts';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { ShellOutput } from '../shell/shell.ts';
@@ -47,7 +48,12 @@ export function createTerminal(
   });
   const fitAddon = new FitAddon();
   term.loadAddon(fitAddon);
+
   term.open(container);
+  // Links (http/https) per Klick bzw. Tippen in einem neuen Tab öffnen, ohne Zugriff auf diese Seite.
+  const screenEl = container.querySelector<HTMLElement>('.xterm-screen');
+  if (screenEl)
+    bindLinks(term, screenEl, (url) => window.open(url, '_blank', 'noopener,noreferrer'));
   // Den Cursor zeichnet die Prompt-Zeile selbst (prompt-line.ts).
   term.write('\x1b[?25l');
 

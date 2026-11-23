@@ -1,7 +1,9 @@
 import { COMMANDS } from '@maxim-os/shared';
 import { MSG, VfsError, type VNode } from '../vfs/vfs.ts';
 import type { Workspace } from '../vfs/workspace.ts';
-import { formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
+import { clean, formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
+import { formatProjects, formatSteckbrief } from '../profile/format.ts';
+import { parseProfileData, type GithubData } from '../profile/github.ts';
 import { formatHelp } from './help.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
 import { style } from './text.ts';
@@ -189,6 +191,64 @@ const reset: ClientHandler = async (ctx) => {
   ctx.out.print([style.green('Originalzustand wiederhergestellt.')]);
 };
 
+/** Zeilen einer Datei aus der lokalen Kopie, oder undefined. */
+function readLines(ws: Workspace | undefined, path: string): string[] | undefined {
+  try {
+    const text = ws?.fs.readText(path);
+    return text === undefined ? undefined : text.replace(/\n$/, '').split('\n');
+  } catch {
+    return undefined;
+  }
+}
+
+/** GitHub-Daten, sonst der Fallback aus content/about/steckbrief.json. */
+async function profileData(ctx: CommandContext): Promise<GithubData | undefined> {
+  const live = await ctx.services.github?.();
+  if (live) return live;
+  try {
+    const raw = ctx.ws?.fs.readText('/about/steckbrief.json');
+    return raw ? parseProfileData(JSON.parse(raw)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const NO_PROFILE = 'Daten nicht verfügbar (GitHub nicht erreichbar, kein Fallback).';
+
+const steckbrief: ClientHandler = async (ctx) => {
+  const data = await profileData(ctx);
+  if (!data) return ctx.shell.error(`steckbrief: ${NO_PROFILE}`);
+  const portrait = {
+    wide: readLines(ctx.ws, '/about/portrait.txt'),
+    narrow: readLines(ctx.ws, '/about/portrait-narrow.txt'),
+  };
+  ctx.out.print(formatSteckbrief(data, portrait, ctx.out.cols()));
+};
+
+const projects: ClientHandler = async (ctx) => {
+  const data = await profileData(ctx);
+  if (!data) return ctx.shell.error(`projects: ${NO_PROFILE}`);
+  ctx.out.print(formatProjects(data.repos, ctx.out.cols()));
+};
+
+const ABOUT_DEFAULT = [
+  'MAXIM OS ist meine persönliche Website im Stil eines Terminals.',
+  "Tippe 'help' für alle Commands oder 'steckbrief', um mich kennenzulernen.",
+];
+
+const about: ClientHandler = (ctx) => {
+  const text = readLines(ctx.ws, '/about/about.txt');
+  ctx.out.print(text ? formatCat(`${text.join('\n')}\n`) : ABOUT_DEFAULT);
+};
+
+const whoami: ClientHandler = (ctx) =>
+  ctx.out.print(['guest', style.dim("Du bist Gast in MAXIM OS. Wer ich bin: 'steckbrief'")]);
+
+const history: ClientHandler = (ctx) => {
+  const entries = ctx.shell.history.entries();
+  ctx.out.print(entries.map((e, i) => `${String(i + 1).padStart(4)}  ${clean(e)}`));
+};
+
 function fail(message: string): never {
   throw new VfsError(message);
 }
@@ -209,4 +269,9 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   cp,
   echo,
   reset,
+  steckbrief,
+  projects,
+  about,
+  whoami,
+  history,
 });

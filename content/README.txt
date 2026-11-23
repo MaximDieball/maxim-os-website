@@ -8,4 +8,5 @@ aber nichts verändern.
   cat <datei>   zeigt eine Textdatei an
   tree          zeigt alles als Baum
 
+Mehr über mich: 'steckbrief', 'projects' oder 'cat about/about.txt'.
 Tipp: 'ls -a' zeigt auch versteckte Dateien.

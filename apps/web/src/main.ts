@@ -13,6 +13,7 @@ import { bindTouchScroll } from './terminal/touch-scroll.ts';
 import { trackVisualViewport } from './terminal/viewport.ts';
 import { THEME as theme } from './theme/theme.ts';
 import { loadWorkspace } from './vfs/load.ts';
+import { loadGithub, sessionStore } from './profile/github.ts';
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -41,7 +42,12 @@ async function boot(): Promise<void> {
   ]);
 
   const view = createTerminal(termEl, createLiveRegion(byId('live')), theme);
-  const editor = createNativeInput(form, input, view, (out) => new Shell(out, workspace));
+  const editor = createNativeInput(
+    form,
+    input,
+    view,
+    (out) => new Shell(out, workspace, { github: () => loadGithub({ storage: sessionStore() }) }),
+  );
 
   trackVisualViewport(app, () => {
     view.fit();

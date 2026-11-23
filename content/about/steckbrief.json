@@ -1,0 +1,37 @@
+{
+  "profile": {
+    "login": "MaximDieball",
+    "name": "Maxim",
+    "location": "Norderstedt",
+    "company": "Otto GmbH & Co. KGaA",
+    "blog": "https://maximdieball.de",
+    "htmlUrl": "https://github.com/MaximDieball",
+    "publicRepos": 4,
+    "followers": 4
+  },
+  "repos": [
+    {
+      "name": "maxim-os-website",
+      "description": "vibe coded personal website",
+      "language": "TypeScript",
+      "url": "https://github.com/MaximDieball/maxim-os-website"
+    },
+    {
+      "name": "ChessBot",
+      "language": "Python",
+      "url": "https://github.com/MaximDieball/ChessBot"
+    },
+    {
+      "name": "ESP-32-based-physical-password-manager",
+      "language": "C++",
+      "stars": 2,
+      "url": "https://github.com/MaximDieball/ESP-32-based-physical-password-manager"
+    },
+    {
+      "name": "Paper-Memes",
+      "description": "An overlay to paper trade pumpfun meme coins on photon 🚀",
+      "language": "JavaScript",
+      "url": "https://github.com/MaximDieball/Paper-Memes"
+    }
+  ]
+}

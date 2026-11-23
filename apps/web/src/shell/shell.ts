@@ -8,6 +8,7 @@ import {
   type FlagValues,
 } from '@maxim-os/shared';
 import { VfsError } from '../vfs/vfs.ts';
+import type { GithubData } from '../profile/github.ts';
 import type { Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS } from './commands.ts';
 import { clean } from './format.ts';
@@ -34,6 +35,13 @@ export interface CommandContext {
   /** Arbeitskopie; undefined, wenn der Snapshot nicht geladen werden konnte. */
   ws: Workspace | undefined;
   signal: AbortSignal | undefined;
+  services: ShellServices;
+}
+
+/** Externe Dienste der Shell (im Test durch Fakes ersetzt). */
+export interface ShellServices {
+  /** Öffentliche GitHub-Daten; undefined, wenn nicht erreichbar. */
+  github?: () => Promise<GithubData | undefined>;
 }
 
 export type ClientHandler = (ctx: CommandContext) => void | Promise<void>;
@@ -54,13 +62,19 @@ export class Shell {
   onInputRequest: (() => void) | undefined;
 
   private readonly out: ShellOutput;
+  private readonly services: ShellServices;
   private ws: Workspace | undefined;
   private readonly ready: Promise<void>;
   private pending: ((answer: string | undefined) => void) | undefined;
   private warnedSave = false;
 
-  constructor(out: ShellOutput, workspace?: Workspace | Promise<Workspace | undefined>) {
+  constructor(
+    out: ShellOutput,
+    workspace?: Workspace | Promise<Workspace | undefined>,
+    services: ShellServices = {},
+  ) {
     this.out = out;
+    this.services = services;
     this.ready = Promise.resolve(workspace).then(
       (ws) => {
         this.ws = ws;
@@ -153,6 +167,7 @@ export class Shell {
       shell: this,
       ws,
       signal,
+      services: this.services,
     });
 
     let wrote = spec.writes === true;
