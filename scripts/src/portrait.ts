@@ -83,11 +83,15 @@ export function toAscii(img: Gray, cols: number, options: AsciiOptions = {}): st
   return lines;
 }
 
-/** Entfernt kleine Inseln (weniger als `min` verbundene Zeichen), z. B. Rauschen an Schnittkanten. */
-export function despeckle(lines: string[], min = 4): string[] {
+/**
+ * Entfernt kleine Inseln, z. B. Rauschen an Schnittkanten: weniger als `min` verbundene
+ * Zeichen oder kleiner als `relative` mal die größte Insel.
+ */
+export function despeckle(lines: string[], min = 4, relative = 0): string[] {
   const grid = lines.map((l) => [...l]);
   const seen = grid.map((row) => row.map(() => false));
   const filled = (r: number, c: number) => (grid[r]?.[c] ?? ' ') !== ' ';
+  const islands: [number, number][][] = [];
   for (let r = 0; r < grid.length; r++) {
     for (let c = 0; c < grid[r]!.length; c++) {
       if (!filled(r, c) || seen[r]![c]) continue;
@@ -109,8 +113,13 @@ export function despeckle(lines: string[], min = 4): string[] {
           }
         }
       }
-      if (island.length < min) for (const [y, x] of island) grid[y]![x] = ' ';
+      islands.push(island);
     }
+  }
+  const largest = Math.max(0, ...islands.map((i) => i.length));
+  const keep = Math.max(min, largest * relative);
+  for (const island of islands) {
+    if (island.length < keep) for (const [y, x] of island) grid[y]![x] = ' ';
   }
   return grid.map((row) => row.join('').trimEnd());
 }

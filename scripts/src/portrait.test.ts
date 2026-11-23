@@ -89,4 +89,11 @@ describe('despeckle', () => {
   it('removes small islands but keeps larger connected areas', () => {
     expect(despeckle(['@@    .', '@@    .:', '', '   :'])).toEqual(['@@', '@@', '', '']);
   });
+
+  it('removes islands that are small compared to the largest one', () => {
+    const big = Array.from({ length: 5 }, () => '@@@@@@@@@@');
+    const out = despeckle([...big, '', '            ...', '             ..'], 2, 0.2);
+    expect(out.slice(5).every((l) => l === '')).toBe(true);
+    expect(out.slice(0, 5)).toEqual(big);
+  });
 });

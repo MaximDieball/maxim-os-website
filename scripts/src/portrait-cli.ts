@@ -26,7 +26,7 @@ const png = PNG.sync.read(readFileSync(input));
 const gray = toGray(png.data, png.width, png.height);
 mkdirSync(outDir, { recursive: true });
 for (const { file, cols } of VARIANTS) {
-  const lines = crop(despeckle(toAscii(gray, cols, { aspect: 2.1, floor: 0.12 }), 6));
+  const lines = crop(despeckle(toAscii(gray, cols, { aspect: 2.1, floor: 0.12 }), 6, 0.1));
   const target = join(outDir, file);
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, `${lines.join('\n')}\n`);
