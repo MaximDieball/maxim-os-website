@@ -186,7 +186,7 @@ Zeigt einen Steckbrief von mir. Die Daten kommen von GitHub (Profil, Repos): Der
 
 ### Weitere Basis-Commands (clientseitig)
 
-`clear`, `projects` (Liste aller meiner Projekte; ein Klick auf ein Projekt führt `project <name>` aus, statt direkt auf eine externe Seite zu springen), `project <name>` (Projektseite: Name, Beschreibung, Sprache, Sterne, letztes Update, Links zu GitHub und Website, darunter die README als Text; Namen per Tab vervollständigbar), `about`, `whoami`, `history`. Im `steckbrief` stehen ebenfalls alle Projekte als klickbare Liste, dazu eigene Angaben aus `content/about/steckbrief.json` (`facts`, z. B. Studium: Angewandte Informatik an der Nordakademie, dualer Student). Unbekannte Commands geben `command not found: <name>. Tippe 'help --short'.` aus (der Vorschlag ist klickbar).
+`clear`, `projects` (Liste aller meiner Projekte; ein Klick auf ein Projekt führt `project <name>` aus, statt direkt auf eine externe Seite zu springen), `project <name>` (Projektseite: Name, Beschreibung, Sprache, Sterne, letztes Update, Links zu GitHub und Website, Produkt- und Download-Seiten wie der Chrome Web Store aus `projectLinks` in `content/about/steckbrief.json`, darunter die README als Text; Namen per Tab vervollständigbar). `projects` weist auf solche Seiten kurz hin (z. B. „Download: Chrome Web Store“), `about`, `whoami`, `history`. Im `steckbrief` stehen ebenfalls alle Projekte als klickbare Liste, dazu eigene Angaben aus `content/about/steckbrief.json` (`facts`, z. B. Studium: Angewandte Informatik an der Nordakademie, dualer Student). Unbekannte Commands geben `command not found: <name>. Tippe 'help --short'.` aus (der Vorschlag ist klickbar).
 
 ### Terminal-UX
 

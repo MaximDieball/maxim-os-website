@@ -3,7 +3,12 @@ import { MSG, VfsError, type VNode } from '../vfs/vfs.ts';
 import type { Workspace } from '../vfs/workspace.ts';
 import { clean, formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
 import { formatProject, formatProjects, formatSteckbrief } from '../profile/format.ts';
-import { parseFacts, parseProfileData, type GithubData } from '../profile/github.ts';
+import {
+  parseFacts,
+  parseProfileData,
+  parseProjectLinks,
+  type GithubData,
+} from '../profile/github.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
 import { keepTogether, withSuggestions } from './suggest.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
@@ -217,7 +222,14 @@ export async function profileData(
     file = undefined;
   }
   const data = (await ctx.services.github?.()) ?? parseProfileData(file);
-  return data && { ...data, facts: parseFacts(file) };
+  if (!data) return undefined;
+  // Produkt- und Download-Seiten (#95) kommen immer aus der Datei
+  const links = parseProjectLinks(file);
+  const repos = data.repos.map((r) => {
+    const extra = links.get(r.name.toLowerCase());
+    return extra ? { ...r, links: extra } : r;
+  });
+  return { ...data, repos, facts: parseFacts(file) };
 }
 
 const NO_PROFILE = 'Daten nicht verfügbar (GitHub nicht erreichbar, kein Fallback).';
@@ -252,7 +264,12 @@ const project: ClientHandler = async (ctx) => {
   }
   const readme = await ctx.services.readme?.(repo.name);
   if (ctx.signal?.aborted) return;
-  const { lines, actions } = formatProject(repo, readme, ctx.out.cols());
+  const { lines, actions } = formatProject(
+    repo,
+    readme,
+    ctx.out.cols(),
+    data.source === 'fallback' && readme === undefined,
+  );
   ctx.out.print(lines, actions);
 };
 

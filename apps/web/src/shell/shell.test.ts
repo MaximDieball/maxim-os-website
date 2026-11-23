@@ -580,6 +580,24 @@ describe('profile commands', () => {
     expect(await sh.complete('project max')).toBe('project maxim-os-website ');
   });
 
+  it('project pages show download links from the content folder, also with live data', async () => {
+    const snap = structuredClone(FALLBACK_SNAP);
+    const about = snap.root.children.find((c) => c.name === 'about') as {
+      children: { name: string; text?: string }[];
+    };
+    about.children[0]!.text = JSON.stringify({
+      profile: { login: 'Offline', htmlUrl: 'https://github.com/Offline' },
+      projectLinks: {
+        'MAXIM-OS-WEBSITE': [{ kind: 'product', label: 'Live', url: 'https://maxim-dieball.de' }],
+      },
+    });
+    const { out, lines } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(snap, memoryStore()), { github: async () => GH });
+    await sh.execute('project maxim-os-website');
+    expect(lines.join('\n')).toMatch(/Produkt +Live/);
+    expect(lines.join('\n')).toContain('https://maxim-dieball.de/');
+  });
+
   it('steckbrief always shows the facts from the content folder', async () => {
     const snap = structuredClone(FALLBACK_SNAP);
     const about = snap.root.children.find((c) => c.name === 'about') as {

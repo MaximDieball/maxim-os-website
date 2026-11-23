@@ -39,5 +39,14 @@
       "language": "JavaScript",
       "url": "https://github.com/MaximDieball/Paper-Memes"
     }
-  ]
+  ],
+  "projectLinks": {
+    "Paper-Memes": [
+      {
+        "kind": "download",
+        "label": "Chrome Web Store",
+        "url": "https://chromewebstore.google.com/detail/paper-memes-to-the-moon/hgdfiddihagiidddmifmoknaglmpmdkd"
+      }
+    ]
+  }
 }

@@ -55,3 +55,13 @@ test.describe('boot animation', () => {
     }
   });
 });
+
+test('project page with download link', async ({ page }, info) => {
+  // Ohne GitHub: Fallback-Daten aus content/about/steckbrief.json
+  await page.route('https://api.github.com/**', (route) => route.abort());
+  await openTerminal(page);
+  await run(page, 'projects');
+  await run(page, 'project Paper-Memes');
+  await page.waitForTimeout(300);
+  await page.screenshot(shot(info.project.name, '06-project'));
+});
