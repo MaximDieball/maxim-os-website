@@ -2,6 +2,8 @@
 
 export interface HealthResponse {
   status: 'ok';
+  /** Commit, aus dem das Image gebaut wurde (Build-Arg GIT_COMMIT), sonst "dev". */
+  version: string;
 }
 
 export interface ErrorResponse {

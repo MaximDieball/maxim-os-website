@@ -19,7 +19,11 @@ RUN pnpm build \
 
 # --- Runtime ---
 FROM node:26.13.1-alpine AS runtime
+# Commit, aus dem gebaut wurde: docker build --build-arg GIT_COMMIT=$(git rev-parse HEAD) ...
+# Erscheint in GET /api/health als "version". .git selbst kommt nie ins Image.
+ARG GIT_COMMIT=dev
 ENV NODE_ENV=production \
+    APP_VERSION=${GIT_COMMIT} \
     PORT=3000 \
     HOST=0.0.0.0 \
     PUBLIC_DIR=/app/public \

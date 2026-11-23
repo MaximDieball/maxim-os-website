@@ -16,6 +16,8 @@ export interface AppOptions {
   publicDir?: string;
   /** Snapshot des Content-Ordners für GET /api/fs. */
   snapshot?: Snapshot;
+  /** Build-Version (Commit-SHA) für /api/health. */
+  version?: string;
   rateLimit?: RateLimitOptions;
 }
 
@@ -94,7 +96,13 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
   });
   const limited = { config: { rateLimit: {} } };
 
-  app.get('/api/health', async (): Promise<HealthResponse> => ({ status: 'ok' }));
+  // Health hängt von nichts Externem ab (kein LLM, kein Minecraft): die Website soll auch
+  // ohne diese Dienste als gesund gelten. Die Version zeigt dem Deploy-Skript den laufenden Stand.
+  const version = /^[0-9a-zA-Z._-]{1,64}$/.test(options.version ?? '') ? options.version! : 'dev';
+  app.get('/api/health', async (_request, reply): Promise<HealthResponse> => {
+    void reply.header('cache-control', 'no-store');
+    return { status: 'ok', version };
+  });
 
   const snapshot = options.snapshot;
   if (snapshot) {
