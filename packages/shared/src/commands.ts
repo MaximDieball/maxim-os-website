@@ -111,6 +111,16 @@ export const COMMANDS: readonly CommandSpec[] = [
     redirect: true,
   },
   {
+    name: 'watchthis',
+    group: 'links',
+    aliases: ['wt', 'WatchThis'],
+    description: 'Öffnet meine Film-Seite movies.maxim-dieball.de in einem neuen Tab.',
+    usage: 'watchthis',
+    example: 'watchthis',
+    flags: [],
+    operands: NONE,
+  },
+  {
     name: 'ls',
     group: 'files',
     aliases: [],

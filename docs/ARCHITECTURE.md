@@ -98,6 +98,8 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 
 **Klickbare Vorschläge (#93):** `shell/suggest.ts` findet Commands in einfachen Anführungszeichen (`'help --short'`, `'steckbrief'`), hebt sie hervor (`style.command`: gelb, unterstrichen) und liefert Spaltenbereiche (`LineAction.from`/`to`); mehrere Bereiche pro Zeile sind möglich. Platzhalter wie `'project <name>'` bleiben Text. Geschützte Leerzeichen (`keepTogether`) verhindern, dass ein Vorschlag umbricht. Sichtbarkeit einheitlich: Commands gelb, Links blau (`style.link`), Einträge cyan, alles Klickbare unterstrichen.
 
+**Fortschritt und Dienste (#34):** `ShellOutput.replaceLast(line)` ersetzt die zuletzt ausgegebene Zeile (Ladebalken). Handler bekommen Browser-Funktionen nur über `ShellServices` (`delay`, `openUrl`, `github`, `readme`), damit sie im Test ersetzbar sind. `watchthis` braucht unter 1 s bis zum `window.open`, damit Browser den Tab noch der Eingabe zuordnen; der Link bleibt als Fallback stehen.
+
 ## 4. Shared (`packages/shared/src`)
 
 | Datei         | Inhalt                                                                                                                                                                                                                                                                                                              |

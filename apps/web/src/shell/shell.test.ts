@@ -193,6 +193,47 @@ describe('clickable suggestions (#93)', () => {
   });
 });
 
+describe('watchthis (#34)', () => {
+  function watch() {
+    const opened: string[] = [];
+    const { out, lines } = fakeOutput(60);
+    let replaced = 0;
+    out.replaceLast = (l) => {
+      replaced++;
+      lines[lines.length - 1] = stripAnsi(l);
+    };
+    const sh = new Shell(out, undefined, {
+      delay: async () => {},
+      openUrl: (u) => void opened.push(u),
+    });
+    return { sh, lines, opened, replaced: () => replaced };
+  }
+
+  it('shows a progress bar, then opens the page and offers a link', async () => {
+    const { sh, lines, opened, replaced } = watch();
+    await sh.execute('watchthis');
+    expect(replaced()).toBe(10);
+    expect(lines.join('\n')).toMatch(/\[█+\] 100%/);
+    expect(opened).toEqual(['https://movies.maxim-dieball.de']);
+    expect(lines.at(-1)).toBe('https://movies.maxim-dieball.de');
+  });
+
+  it('works with the aliases wt and WatchThis', async () => {
+    const { sh, opened } = watch();
+    await sh.execute('wt');
+    await sh.execute('WatchThis');
+    expect(opened).toHaveLength(2);
+  });
+
+  it('opens nothing when cancelled with Ctrl+C', async () => {
+    const { sh, opened } = watch();
+    const controller = new AbortController();
+    controller.abort();
+    await sh.execute('watchthis', controller.signal);
+    expect(opened).toEqual([]);
+  });
+});
+
 const T = '2026-01-01T00:00:00.000Z';
 const SNAP: Snapshot = {
   version: 'v1',

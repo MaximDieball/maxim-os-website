@@ -100,6 +100,9 @@ export function createNativeInput(
       commit();
       view.output.print(lines, actions);
     },
+    replaceLast(line) {
+      view.output.replaceLast?.(line);
+    },
     clear() {
       shown = false;
       view.output.clear();

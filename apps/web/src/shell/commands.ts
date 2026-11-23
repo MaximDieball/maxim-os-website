@@ -273,6 +273,55 @@ const project: ClientHandler = async (ctx) => {
   ctx.out.print(lines, actions);
 };
 
+export const WATCH_URL = 'https://movies.maxim-dieball.de';
+
+/** Wartet, bricht bei Ctrl+C sofort ab. */
+const defaultDelay = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+/** ASCII-Ladebalken, z. B. "[██████░░░░]  60%". */
+export function progressBar(fraction: number, width: number): string {
+  const done = Math.round(Math.min(1, Math.max(0, fraction)) * width);
+  const pct = `${Math.round(fraction * 100)}%`.padStart(4);
+  return `[${style.cyan('█'.repeat(done))}${style.dim('░'.repeat(width - done))}] ${pct}`;
+}
+
+/**
+ * `watchthis` (#34): kurzer Ladebalken, dann movies.maxim-dieball.de im neuen Tab.
+ * Kurz gehalten (unter 1 s), damit der Browser den Tab noch der Eingabe zuordnet;
+ * blockiert er trotzdem, bleibt der klickbare Link.
+ */
+const watchthis: ClientHandler = async (ctx) => {
+  const delay = ctx.services.delay ?? defaultDelay;
+  const width = Math.max(10, Math.min(30, ctx.out.cols() - 8));
+  ctx.out.print([
+    `${style.bold('WatchThis')}  ${style.dim('verbinde mit movies.maxim-dieball.de …')}`,
+    progressBar(0, width),
+  ]);
+  const steps = 10;
+  for (let i = 1; i <= steps; i++) {
+    await delay(60, ctx.signal);
+    if (ctx.signal?.aborted) return;
+    ctx.out.replaceLast?.(progressBar(i / steps, width));
+  }
+  ctx.services.openUrl?.(WATCH_URL);
+  ctx.out.print([
+    `${style.green('✓')} In einem neuen Tab geöffnet.`,
+    style.dim('Kein neuer Tab? Hier klicken:'),
+    style.link(WATCH_URL),
+  ]);
+};
+
 /** Vervollständigung für Operanden, die keine Pfade sind (z. B. Projektnamen). */
 export const OPERAND_COMPLETIONS: Readonly<
   Record<string, (ctx: Pick<CommandContext, 'services' | 'ws'>) => Promise<string[]>>
@@ -360,6 +409,7 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   steckbrief,
   projects,
   project,
+  watchthis,
   about,
   whoami,
   history,

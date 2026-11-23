@@ -92,6 +92,10 @@ export function createTerminal(
       }
       live.announce(lines.map(stripAnsi).join('\n'));
     },
+    replaceLast(line) {
+      // Eine Zeile hoch, löschen, neu schreiben (Zeile ist kürzer als die Terminalbreite)
+      term.write(`\x1b[1A\r\x1b[2K${line}\r\n`, () => term.scrollToBottom());
+    },
     clear() {
       actions.clear();
       term.write('\x1b[2J\x1b[3J\x1b[H');

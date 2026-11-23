@@ -174,7 +174,7 @@ Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplet
 
 ### watchthis (Aliase: `wt`, `WatchThis`)
 
-Zeigt eine Boot-Animation mit einem ASCII-Ladebalken. Danach öffnet die Website selbst einen neuen Tab mit `https://movies.maxim-dieball.de`. Manche Browser blockieren `window.open` ohne User-Geste, biete daher einen anklickbaren Link im Terminal als Fallback an.
+Zeigt eine Boot-Animation mit einem ASCII-Ladebalken. Danach öffnet die Website selbst einen neuen Tab mit `https://movies.maxim-dieball.de`. Manche Browser blockieren `window.open` ohne User-Geste, biete daher einen anklickbaren Link im Terminal als Fallback an. Der Ladebalken ist kurz (unter 1 s), damit der Tab noch als Folge der Eingabe gilt; Ctrl+C bricht ab, ohne etwas zu öffnen.
 
 ### minecraft
 
