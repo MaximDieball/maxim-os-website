@@ -100,6 +100,8 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 
 **Fortschritt und Dienste (#34):** `ShellOutput.replaceLast(line)` ersetzt die zuletzt ausgegebene Zeile (Ladebalken). Handler bekommen Browser-Funktionen nur über `ShellServices` (`delay`, `openUrl`, `github`, `readme`), damit sie im Test ersetzbar sind. `watchthis` braucht unter 1 s bis zum `window.open`, damit Browser den Tab noch der Eingabe zuordnen; der Link bleibt als Fallback stehen.
 
+**Spiele (#32, #33):** `games/snake.ts` ist reine Spiellogik (Zustand, `turn`, `step`, `render`), `games/run-snake.ts` die Spielschleife gegen die Schnittstelle `GameScreen`. Im Browser implementiert `terminal/game-screen.ts` sie: alternativer xterm-Bildschirm (`\x1b[?1049h`/`l`, nach dem Spiel ist die alte Ausgabe wieder da), Tasten per `keydown` in der Capture-Phase (Pfeile, WASD über `e.code` layoutunabhängig, Esc, Ctrl+C ohne Kopieren), ✕ über einen Klick in die erste Zelle. Highscore im `localStorage` (`ShellServices.storage`). Auf Handys (`isMobile`: grober Zeiger ohne Hover oder Breite < 500 px) fragt `snake` vorher mit (y/N), Standard ist Abbruch. Ctrl+C über die Quick-Keys bricht über das normale Abbruch-Signal ab.
+
 ## 4. Shared (`packages/shared/src`)
 
 | Datei         | Inhalt                                                                                                                                                                                                                                                                                                              |

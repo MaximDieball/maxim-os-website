@@ -4,6 +4,8 @@ import './styles.css';
 import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
 import { withSuggestions } from './shell/suggest.ts';
+import { createGameScreen } from './terminal/game-screen.ts';
+import { browserStorage } from './vfs/workspace.ts';
 import { FS_UNAVAILABLE, Shell } from './shell/shell.ts';
 import { style } from './shell/text.ts';
 import { createLiveRegion } from './terminal/live.ts';
@@ -15,6 +17,11 @@ import { trackVisualViewport } from './terminal/viewport.ts';
 import { THEME as theme } from './theme/theme.ts';
 import { loadWorkspace } from './vfs/load.ts';
 import { loadGithub, loadReadme, sessionStore } from './profile/github.ts';
+
+/** Touch-Gerät ohne feinen Zeiger oder sehr schmaler Bildschirm (SPEC 4a, #33). */
+const isMobile = (): boolean =>
+  (matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches) ||
+  window.innerWidth < 500;
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -52,6 +59,10 @@ async function boot(): Promise<void> {
         github: () => loadGithub({ storage: sessionStore() }),
         readme: (repo) => loadReadme(repo, { storage: sessionStore() }),
         openUrl: (url) => void window.open(url, '_blank', 'noopener,noreferrer'),
+        gameScreen: () =>
+          createGameScreen(view.term, termEl.querySelector<HTMLElement>('.xterm-screen'), form),
+        isMobile,
+        storage: browserStorage(),
       }),
   );
   // Klickbare Zeilen (z. B. Projekte) führen ihr Command aus, als wäre es getippt.
