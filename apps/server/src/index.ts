@@ -11,8 +11,11 @@ const skipped: { path: string; reason: string }[] = [];
 const snapshot = await buildSnapshot(contentDir, {
   onSkip: (path, reason) => skipped.push({ path, reason }),
 });
-const app = await buildApp({ publicDir, snapshot });
-app.log.info({ version: snapshot.version, skipped: skipped.length }, 'content snapshot ready');
+const app = await buildApp({ publicDir, snapshot, version: process.env.APP_VERSION });
+app.log.info(
+  { app: process.env.APP_VERSION ?? 'dev', content: snapshot.version, skipped: skipped.length },
+  'content snapshot ready',
+);
 for (const s of skipped) app.log.warn(s, 'content entry skipped');
 
 const shutdown = async (): Promise<void> => {

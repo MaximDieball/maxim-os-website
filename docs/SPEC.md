@@ -252,12 +252,16 @@ Server: Intel i7-7700 (4 Kerne / 8 Threads), 11 GB RAM (davon ca. 6 GB frei), **
 - **Achtung Pascal:** Neuere CUDA-Versionen (ab 13) und neue NVIDIA-Treiberzweige unterstützen Pascal-Karten wie die 1050 Ti nicht mehr. Das llama.cpp-Image wird deshalb auf einen **CUDA-12-Build** festgelegt, und die CPU-Variante bleibt immer lauffähig.
 - **Spike (erstes Ticket des Meilensteins):** auf dem echten Server 2 bis 3 Kandidaten vergleichen. Kriterien: passt in VRAM bzw. RAM, Tokens pro Sekunde, Zeit bis zum ersten Token, Qualität auf Deutsch an 10 festen Testfragen, Lizenz. Dafür gibt es `make llm-bench`. Ergebnis in `docs/llm-spike.md`, Entscheidung durch mich.
 
-### Betrieb
+### Betrieb und Vertrag zum Server
 
-- Compose-Profil `llm`: `make llm` startet den KI-Container zusätzlich (GPU-Variante mit `deploy.resources.reservations.devices` für NVIDIA, CPU-Variante über `LLM_DEVICE=cpu`).
-- `make llm-model` lädt das gewählte Modell mit fest hinterlegter URL **und SHA-256-Prüfsumme** in das Modell-Volume. Das Modell liegt nicht im Image und nicht im Repo.
-- Limits für den Container: Speicher (z. B. 5 GB), CPU (z. B. 6 von 8 Threads), damit Website und Minecraft-Server flüssig bleiben. Healthcheck auf `/health`.
-- Konfiguration über `.env`: Modelldatei, Kontextgröße, Threads, GPU-Layer, Variante.
+Trennung (abgestimmt mit dem Server-Setup, #84): **Das Repo enthält die App, das Dockerfile und generische Compose-Dateien. Server-Spezifisches (Pfade, Netze wie `llm-net`, Cron/Timer, Secrets) liegt auf dem Server in `~/stacks`, nicht im Repo.**
+
+- **Vertrag Website → LLM:** Die Website kennt nur `LLM_URL` (Standard `http://llm:8080`) und optional `LLM_API_KEY`. Die API ist **OpenAI-kompatibel** (`POST /v1/chat/completions` mit Streaming, `GET /health`), damit auch andere Container das Modell nutzen können. Wer das LLM betreibt (Repo-Compose oder eigener Stack auf dem Server), ist der Website egal.
+- **Limits im Vertrag:** Kontextlänge (z. B. 4096), parallele Anfragen (z. B. 1 Slot), maximale Antwortlänge; `llama-server` setzt sie per Startparameter (`--ctx-size`, `--parallel`, `--api-key` optional).
+- **`docker-compose.llm.yml`** im Repo (optional, Referenz und lokal): zwei Profile `llm-cpu` und `llm-gpu` (GPU mit `deploy.resources.reservations.devices` für NVIDIA). Man kann auf dem Server erst mit CPU anfangen.
+- **Modell-Doku statt Modell im Repo:** `docs/llm-model.md` nennt Modell, Quantisierung, Download-Quelle, **SHA-256-Prüfsumme** und den Bedarf an RAM/VRAM, **ausdrücklich neben Minecraft** (auf dem Server sind ca. 6 GB RAM frei). `make llm-model` lädt das Modell mit dieser URL und Prüfsumme in ein Volume; das Modell liegt nie im Image oder Repo.
+- **Unabhängigkeit:** `/api/health` hängt nie vom LLM oder Minecraft ab. Die Website läuft normal, wenn das LLM aus ist oder noch fehlt (`ask` meldet dann „nicht erreichbar“).
+- Limits für den LLM-Container: Speicher (z. B. 5 GB), CPU (z. B. 6 von 8 Threads), damit Website und Minecraft-Server flüssig bleiben.
 
 ### Tests
 
@@ -354,7 +358,9 @@ maxim-os-website/
 
 - Production-Image (Multi-Stage), Nicht-Root-User, `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, Content-Ordner als Read-only-Volume.
 - `docker-compose.prod.yml` startet die Website auf **einem** klar dokumentierten Port, auf den ich den Tunnel zeigen lasse.
-- Konfiguration über Umgebungsvariablen mit einer `.env.example` (z. B. Minecraft-Host und -Port, Port der App, GitHub-Username, KI-Modell und -Variante). Es werden keine Secrets committed.
+- `docker-compose.prod.yml` enthält **nur die Website**. Das LLM kommt über `docker-compose.llm.yml` oder einen eigenen Stack auf dem Server dazu (Abschnitt 4b).
+- Konfiguration über Umgebungsvariablen mit einer `.env.example`, die **alle** Variablen enthält: Port der App, `LLM_URL`, `LLM_API_KEY` (optional), Minecraft-Host und -Port (mvp-6), GitHub-Username, Modell-Einstellungen für `docker-compose.llm.yml`. Es werden keine Secrets committed.
+- **Build-Version:** Das Image bekommt den Commit per Build-Arg (`docker build --build-arg GIT_COMMIT=$(git rev-parse HEAD) ...`). `GET /api/health` liefert `{ "status": "ok", "version": "<commit>" }`, damit ein Deploy-Skript prüfen kann, dass wirklich der neue Stand läuft (#83).
 - KI-Container: GPU-Variante braucht auf dem Server einen NVIDIA-Treiber mit Pascal-Unterstützung und das NVIDIA Container Toolkit (richte ich selbst ein, die README beschreibt es). Die CPU-Variante läuft ohne GPU. Der KI-Container bekommt **keinen** eigenen Port im Tunnel.
 - Healthcheck-Endpoint und Healthcheck im Compose-File.
 - Die `README.md` enthält: Voraussetzungen, Start und Stop, Update (neues Image ziehen/bauen), Inhalte aktualisieren (Content-Ordner ändern, Container neu starten), KI-Modell herunterladen und wechseln, GPU- vs. CPU-Variante, Logs, welcher Port freigegeben werden muss und welche Subdomains (`maxim-dieball.de`, `movies.`, `minecraft.`) ich im Tunnel einrichten muss.
