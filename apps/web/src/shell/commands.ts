@@ -183,7 +183,7 @@ const echo: ClientHandler = (ctx) => ctx.out.print([ctx.operands.join(' ')]);
 
 const reset: ClientHandler = async (ctx) => {
   if (!needFs(ctx)) return;
-  const ok = await ctx.shell.confirm('Alle deine Änderungen verwerfen?', ctx.signal);
+  const ok = await ctx.shell.confirm('Änderungen verwerfen?', ctx.signal);
   if (!ok) return ctx.out.print(['Abgebrochen.']);
   ctx.shell.resetWorkspace();
   ctx.out.print([style.green('Originalzustand wiederhergestellt.')]);

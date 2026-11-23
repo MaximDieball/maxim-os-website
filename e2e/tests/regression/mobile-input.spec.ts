@@ -92,7 +92,8 @@ test.describe('touch scrolling @input', () => {
 
     // Finger nach unten: ältere Ausgabe kommt ins Bild.
     for (let i = 0; i < 4; i++) await swipe(page, 60, 320);
-    await expect(out).toContainText('an ai coding project');
+    // Ganz oben angekommen: die erste Zeile des Logos ist sichtbar.
+    await expect(out).toContainText('__  __');
     const pageMoved = await page.evaluate(
       () => window.scrollY !== 0 || (window.visualViewport?.offsetTop ?? 0) !== 0,
     );

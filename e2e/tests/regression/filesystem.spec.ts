@@ -45,7 +45,9 @@ test.describe('filesystem', () => {
     await openTerminal(page);
     // Jeden Versuch direkt prüfen (auf kleinen Screens scrollt ältere Ausgabe weg).
     // Umgebrochene Zeilen vor dem Prompt wieder zusammensetzen (xterm.js bricht mitten im Wort um).
-    const lastOutput = async () => (await visibleLines(page)).slice(-4, -1).join('');
+    // Leerzeichen am Zeilenende gehen beim Umbruch verloren: ohne Leerzeichen vergleichen.
+    const lastOutput = async () =>
+      (await visibleLines(page)).slice(-4, -1).join('').replace(/\s+/g, '');
     for (const attempt of [
       'cat ../../../etc/passwd',
       'cat /etc/passwd',
@@ -53,7 +55,7 @@ test.describe('filesystem', () => {
       'cat %2e%2e/%2e%2e/etc/passwd',
     ]) {
       await run(page, attempt);
-      await expect.poll(lastOutput, attempt).toContain('Datei oder Ordner nicht gefunden');
+      await expect.poll(lastOutput, attempt).toContain('DateioderOrdnernichtgefunden');
     }
     // ".." endet an der simulierten Wurzel: zeigt den Content-Ordner, nicht das Host-Root.
     await run(page, 'ls ../../..');
@@ -127,7 +129,7 @@ test.describe('editing the local copy', () => {
     await run(page, 'reset');
     await expect
       .poll(async () => (await visibleLines(page)).at(-1))
-      .toBe('Alle deine Änderungen verwerfen? (y/N)');
+      .toBe('Änderungen verwerfen? (y/N)');
     await run(page, 'y');
     await expect(terminalOutput(page)).toContainText('Originalzustand wiederhergestellt.');
     await run(page, 'ls');

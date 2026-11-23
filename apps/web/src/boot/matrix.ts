@@ -15,7 +15,19 @@ export interface MatrixOptions {
   durationMs?: number;
   /** Überspringen erzwingen (prefers-reduced-motion, ?boot=skip). */
   skip?: boolean;
+  /** Farben: verdeckter Bereich (dunkel, mittel, hell), Spur (RGB) und Kopf. */
+  colors?: {
+    cover: [string, string, string];
+    trail: readonly [number, number, number];
+    head: string;
+  };
 }
+
+const DEFAULT_COLORS = {
+  cover: ['#0b3d1f', '#166534', '#4ade80'] as [string, string, string],
+  trail: [74, 222, 128] as const,
+  head: '#f0fff4',
+};
 
 export function shouldSkipBoot(search: string): boolean {
   return (
@@ -34,6 +46,7 @@ export function runMatrix(canvas: HTMLCanvasElement, options: MatrixOptions = {}
   }
 
   const duration = options.durationMs ?? 2600;
+  const colors = options.colors ?? DEFAULT_COLORS;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -59,7 +72,8 @@ export function runMatrix(canvas: HTMLCanvasElement, options: MatrixOptions = {}
     cctx.fillStyle = '#000';
     cctx.fillRect(c * size, r * size, size, size);
     const bright = Math.random();
-    cctx.fillStyle = bright > 0.92 ? '#4ade80' : bright > 0.6 ? '#166534' : '#0b3d1f';
+    cctx.fillStyle =
+      bright > 0.92 ? colors.cover[2] : bright > 0.6 ? colors.cover[1] : colors.cover[0];
     cctx.fillText(glyph(), c * size, r * size);
   };
   for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) drawCoverCell(c, r);
@@ -111,7 +125,8 @@ export function runMatrix(canvas: HTMLCanvasElement, options: MatrixOptions = {}
         const a = (k + 1) / TRAIL;
         ctx.fillStyle = `rgba(0, 0, 0, ${a * 0.85})`;
         ctx.fillRect(c * size, r * size, size, size);
-        ctx.fillStyle = k === TRAIL - 1 ? '#f0fff4' : `rgba(74, 222, 128, ${a})`;
+        const [tr, tg, tb] = colors.trail;
+        ctx.fillStyle = k === TRAIL - 1 ? colors.head : `rgba(${tr}, ${tg}, ${tb}, ${a})`;
         ctx.fillText(col.trail[k]!, c * size, r * size);
       }
     }
