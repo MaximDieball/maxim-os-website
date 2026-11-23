@@ -1,12 +1,13 @@
-import { COMMANDS } from '@maxim-os/shared';
+import { COMMANDS, findCommand } from '@maxim-os/shared';
 import { MSG, VfsError, type VNode } from '../vfs/vfs.ts';
 import type { Workspace } from '../vfs/workspace.ts';
 import { clean, formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
 import { formatProject, formatProjects, formatSteckbrief } from '../profile/format.ts';
 import { parseFacts, parseProfileData, type GithubData } from '../profile/github.ts';
-import { formatHelp } from './help.ts';
+import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
+import { keepTogether, withSuggestions } from './suggest.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
-import { style } from './text.ts';
+import { stripAnsi, style } from './text.ts';
 
 /**
  * Alle Command-Handler, Schlüssel ist der Registry-Name. Flags und Argumente sind
@@ -260,20 +261,59 @@ export const OPERAND_COMPLETIONS: Readonly<
   Record<string, (ctx: Pick<CommandContext, 'services' | 'ws'>) => Promise<string[]>>
 > = Object.freeze({
   project: async (ctx) => (await profileData(ctx))?.repos.map((r) => r.name) ?? [],
+  help: async () => COMMANDS.map((c) => c.name),
 });
 
 const ABOUT_DEFAULT = [
   'MAXIM OS ist meine persönliche Website im Stil eines Terminals.',
-  "Tippe 'help' für alle Commands oder 'steckbrief', um mich kennenzulernen.",
+  `Tippe '${keepTogether('help --short')}' für eine Übersicht oder 'steckbrief', um mich kennenzulernen.`,
 ];
+
+/** Zeilen wie "  steckbrief   wer ich bin" (Liste in about.txt): der Command ist klickbar. */
+function listedCommands(lines: string[]): ReturnType<typeof withSuggestions> {
+  const out = withSuggestions(lines);
+  lines.forEach((line, i) => {
+    const m = /^(\s+)([a-z][\w-]*)\s{2,}\S/.exec(stripAnsi(line));
+    if (m && findCommand(m[2]!) && !out.actions[i]) {
+      out.actions[i] = { command: m[2]!, from: m[1]!.length, to: m[1]!.length + m[2]!.length };
+    }
+  });
+  return out;
+}
+
+const help: ClientHandler = (ctx) => {
+  const cols = ctx.out.cols();
+  const name = ctx.operands[0];
+  let result;
+  if (name !== undefined) {
+    const spec = findCommand(name);
+    if (!spec) {
+      ctx.shell.error(`help: ${name}: Unbekannter Command.`);
+      const hint = withSuggestions([style.dim(`Übersicht: '${keepTogether('help --short')}'`)]);
+      return ctx.out.print(hint.lines, hint.actions);
+    }
+    result = formatCommandHelp(spec, cols);
+  } else {
+    result = ctx.flags.s ? formatHelpShort(COMMANDS, cols) : formatHelp(COMMANDS, cols);
+  }
+  ctx.out.print(result.lines, result.actions);
+};
 
 const about: ClientHandler = (ctx) => {
   const text = readLines(ctx.ws, '/about/about.txt');
-  ctx.out.print(text ? formatCat(`${text.join('\n')}\n`) : ABOUT_DEFAULT);
+  const { lines, actions } = listedCommands(
+    text ? formatCat(`${text.join('\n')}\n`) : ABOUT_DEFAULT,
+  );
+  ctx.out.print(lines, actions);
 };
 
-const whoami: ClientHandler = (ctx) =>
-  ctx.out.print(['guest', style.dim("Du bist Gast in MAXIM OS. Wer ich bin: 'steckbrief'")]);
+const whoami: ClientHandler = (ctx) => {
+  const { lines, actions } = withSuggestions([
+    'guest',
+    style.dim("Du bist Gast in MAXIM OS. Wer ich bin: 'steckbrief'"),
+  ]);
+  ctx.out.print(lines, actions);
+};
 
 const history: ClientHandler = (ctx) => {
   const entries = ctx.shell.history.entries();
@@ -285,7 +325,7 @@ function fail(message: string): never {
 }
 
 export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.freeze({
-  help: (ctx) => ctx.out.print(formatHelp(COMMANDS, ctx.out.cols())),
+  help,
   clear: (ctx) => ctx.out.clear(),
   ls,
   cd,

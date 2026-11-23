@@ -1,14 +1,11 @@
 import { clean } from '../shell/format.ts';
-import type { LineAction } from '../shell/shell.ts';
+import type { LineAction, Output } from '../shell/shell.ts';
 import { style, wrap } from '../shell/text.ts';
 import type { GithubData, GithubRepo } from './github.ts';
 import { renderMarkdown } from './markdown.ts';
+import { highlightSuggestions, suggestionsIn } from '../shell/suggest.ts';
 
-/** Zeilen plus klickbare Zeilen (gleiche Indizes), für `ShellOutput.print`. */
-export interface Output {
-  lines: string[];
-  actions: (LineAction | undefined)[];
-}
+export type { Output };
 
 /** Command, das die Projektseite öffnet (nur für unverdächtige Namen). */
 export const projectCommand = (name: string): LineAction | undefined =>
@@ -29,7 +26,10 @@ const LABEL = 9;
 const shortUrl = (url: string): string => url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
 /** Info-Block: Name, Fakten, alle Projekte. `width` ist die verfügbare Breite. */
-function infoLines(data: GithubData, width: number): Output {
+function infoLines(
+  data: GithubData,
+  width: number,
+): { lines: string[]; actions: (LineAction | undefined)[] } {
   const p = data.profile;
   const out: string[] = [];
   const actions: (LineAction | undefined)[] = [];
@@ -48,8 +48,8 @@ function infoLines(data: GithubData, width: number): Output {
   for (const f of data.facts ?? []) fact(f.label, f.value);
   fact('Ort', p.location);
   fact('Arbeit', p.company);
-  if (p.blog) out.push(`${style.dim('Web'.padEnd(LABEL))}${clean(p.blog)}`);
-  out.push(`${style.dim('GitHub'.padEnd(LABEL))}${clean(p.htmlUrl)}`);
+  if (p.blog) out.push(`${style.dim('Web'.padEnd(LABEL))}${style.link(clean(p.blog))}`);
+  out.push(`${style.dim('GitHub'.padEnd(LABEL))}${style.link(clean(p.htmlUrl))}`);
   const stats = [
     p.publicRepos !== undefined ? `${p.publicRepos} Repos` : '',
     p.followers !== undefined ? `${p.followers} Follower` : '',
@@ -67,15 +67,16 @@ function infoLines(data: GithubData, width: number): Output {
       const shown = name.length <= room ? name : `${name.slice(0, room - 1)}…`;
       actions[out.length] = projectCommand(repo.name);
       out.push(
-        `  ${style.blue('▸')} ${style.underline(shown)}${withLang ? style.dim(`  ${lang}`) : ''}`,
+        `  ${style.blue('▸')} ${style.cyan(style.underline(shown))}${withLang ? style.dim(`  ${lang}`) : ''}`,
       );
     }
   }
   out.push('');
   const source =
     data.source === 'fallback' ? 'GitHub nicht erreichbar, gespeicherte Daten' : 'Daten von GitHub';
-  for (const l of wrap(`Klick auf ein Projekt öffnet es. Alle: projects · ${source}`, width)) {
-    out.push(style.dim(l));
+  for (const l of wrap(`Klick auf ein Projekt öffnet es. Alle: 'projects' · ${source}`, width)) {
+    actions[out.length] = suggestionsIn(l)[0];
+    out.push(highlightSuggestions(style.dim(l)));
   }
   return { lines: out, actions };
 }
@@ -98,7 +99,15 @@ export function formatSteckbrief(data: GithubData, portrait: Portrait, cols: num
       const right = info.lines[r - offset] ?? '';
       const action = info.actions[r - offset];
       // Nur die Info-Spalte ist klickbar, nicht das Porträt daneben.
-      if (action) actions[r] = { ...action, from: pw + GAP.length };
+      // Neben dem Porträt verschoben; ohne eigenen Bereich ist nur die Info-Spalte klickbar.
+      const shift = pw + GAP.length;
+      if (action) {
+        actions[r] = {
+          ...action,
+          from: shift + (action.from ?? 0),
+          ...(action.to !== undefined ? { to: shift + action.to } : {}),
+        };
+      }
       lines.push(`${style.cyan(left)}${right ? GAP + right : ''}`.trimEnd());
     }
     return { lines, actions };
@@ -147,7 +156,7 @@ export function formatProjects(repos: readonly GithubRepo[], cols: number): Outp
     `Klick oder 'project <name>' zeigt Details und README.`,
     Math.max(10, cols - 1),
   )) {
-    push(style.dim(l));
+    push(highlightSuggestions(style.dim(l)));
   }
   return { lines, actions };
 }
@@ -168,7 +177,7 @@ export function formatProject(repo: GithubRepo, readme: string | undefined, cols
     if (!value) return;
     const v = clean(value);
     // Links nie umbrechen (bleiben klickbar), sonst in der Breite halten.
-    const parts = url ? [style.blue(v)] : wrap(v, Math.max(10, width - LABEL));
+    const parts = url ? [style.link(v)] : wrap(v, Math.max(10, width - LABEL));
     parts.forEach((p, i) =>
       lines.push(`${i === 0 ? style.dim(label.padEnd(LABEL)) : ' '.repeat(LABEL)}${p}`),
     );

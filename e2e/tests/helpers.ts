@@ -36,3 +36,36 @@ export const PROMPT_TEXT = 'guest@maxim-os:/$';
 
 /** Ende der help-Ausgabe (letzter Registry-Eintrag), breit als Tabelle oder schmal gestapelt. */
 export const HELP_END = /Beispiel: +history|history {2,}history/;
+
+/**
+ * Klickt auf einen Text in der Ausgabe. Textzeilen haben pointer-events: none, also per
+ * Position: der letzte Abschnitt (span) mit diesem Text, kurz hinter seinem Anfang.
+ */
+export async function clickText(page: Page, text: string): Promise<void> {
+  // Erst klicken, wenn alles gezeichnet ist und der leere Prompt unten steht.
+  await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
+  const span = page.locator('.xterm-rows span').filter({ hasText: text }).last();
+  // Kleine Bildschirme: xterm zeigt nur sichtbare Zeilen, also ggf. hochscrollen.
+  const screen = (await page.locator('.xterm-screen').boundingBox())!;
+  const wheel = async (dy: number): Promise<void> => {
+    await page.mouse.move(screen.x + screen.width / 2, screen.y + screen.height / 2);
+    await page.mouse.wheel(0, dy);
+  };
+  let scrolled = 0;
+  let box: { x: number; y: number; width: number; height: number } | null = null;
+  // xterm zeichnet Zeilen neu: Position erneut lesen, bis sie stabil vorliegt.
+  for (let i = 0; i < 20 && !box; i++) {
+    box = await span.boundingBox({ timeout: 300 }).catch(() => null);
+    if (!box && scrolled < 10 && !(await span.isVisible())) {
+      await wheel(-60);
+      scrolled++;
+    }
+  }
+  if (!box) throw new Error(`Text nicht gefunden: ${text}`);
+  await page.mouse.click(box.x + Math.min(20, box.width / 2), box.y + box.height / 2);
+  // Zurück zum Prompt wie ein Nutzer: Tippen scrollt ans Ende (ein Link gibt keine Ausgabe).
+  if (scrolled) {
+    await page.keyboard.type('x');
+    await page.keyboard.press('Backspace');
+  }
+}

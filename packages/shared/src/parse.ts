@@ -112,6 +112,7 @@ export function parseArgs(spec: CommandSpec, args: readonly string[]): ParseResu
     return { ok: true, flags, operands: [...args] };
   }
   const byShort = new Map(spec.flags.map((f) => [f.short, f]));
+  const byLong = new Map(spec.flags.filter((f) => f.long && !f.int).map((f) => [f.long!, f]));
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
@@ -124,7 +125,12 @@ export function parseArgs(spec: CommandSpec, args: readonly string[]): ParseResu
       operands.push(arg);
       continue;
     }
-    if (arg.startsWith('--')) return fail(`unbekannte Option: ${printable(arg)}`);
+    if (arg.startsWith('--')) {
+      const flag = byLong.get(arg.slice(2));
+      if (!flag) return fail(`unbekannte Option: ${printable(arg)}`);
+      flags[flag.short] = true;
+      continue;
+    }
 
     // Kurz-Flags: -l, -la, -L 2, -L2
     const letters = [...arg.slice(1)];

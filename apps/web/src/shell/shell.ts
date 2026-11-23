@@ -13,6 +13,7 @@ import type { Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
 import { clean } from './format.ts';
 import { History } from './history.ts';
+import { keepTogether, suggestionsIn } from './suggest.ts';
 import { sanitizeInput, stripAnsi, style, truncate } from './text.ts';
 
 /** Ausgabekanal, den das Terminal (xterm.js) bereitstellt. */
@@ -23,6 +24,17 @@ import { sanitizeInput, stripAnsi, style, truncate } from './text.ts';
 export interface LineAction {
   command: string;
   from?: number;
+  /** Erste Spalte hinter dem klickbaren Bereich (ohne: bis zum Zeilenende). */
+  to?: number;
+}
+
+/** Klickbare Bereiche je Zeile: einer, mehrere (z. B. Vorschläge im Text) oder keiner. */
+export type PrintActions = readonly (LineAction | readonly LineAction[] | undefined)[];
+
+/** Zeilen plus klickbare Bereiche (gleiche Indizes), für `ShellOutput.print`. */
+export interface Output {
+  lines: string[];
+  actions: (LineAction | readonly LineAction[] | undefined)[];
 }
 
 export interface ShellOutput {
@@ -30,7 +42,7 @@ export interface ShellOutput {
    * Gibt Zeilen aus. ANSI-Farben sind erlaubt. `actions[i]` macht Zeile i klickbar
    * (nur im Terminal; bei Umleitung in eine Datei entfällt es).
    */
-  print(lines: string[], actions?: readonly (LineAction | undefined)[]): void;
+  print(lines: string[], actions?: PrintActions): void;
   clear(): void;
   /** Aktuelle Breite in Zeichen. */
   cols(): number;
@@ -154,9 +166,12 @@ export class Shell {
     const handler =
       spec && Object.hasOwn(CLIENT_HANDLERS, spec.name) ? CLIENT_HANDLERS[spec.name] : undefined;
     if (!spec || !handler) {
-      this.out.print([
-        `${style.red('command not found:')} ${truncate(printable(name, 200), MAX_NAME_IN_ERROR)}. Tippe 'help'.`,
-      ]);
+      const message = `${style.red('command not found:')} ${truncate(printable(name, 200), MAX_NAME_IN_ERROR)}. Tippe '${keepTogether('help --short')}'.`;
+      // Nur unser eigener Vorschlag ist klickbar, nicht etwas aus der Eingabe.
+      const hint = suggestionsIn(message)
+        .filter((a) => a.command === 'help --short')
+        .slice(-1);
+      this.out.print([message], [hint]);
       return;
     }
     const argv = parseArgs(spec, args);

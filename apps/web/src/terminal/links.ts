@@ -52,20 +52,29 @@ export class LineActions {
 
   add(marker: IMarker | undefined, action: LineAction): void {
     if (!marker) return;
+    const first = !this.entries.some((e) => e.marker === marker);
     this.entries.push({ marker, action });
-    marker.onDispose(() => {
-      this.entries = this.entries.filter((e) => e.marker !== marker);
-    });
+    if (first) {
+      marker.onDispose(() => {
+        this.entries = this.entries.filter((e) => e.marker !== marker);
+      });
+    }
   }
 
   /** Command für die logische Zeile, die in Pufferzeile `start` beginnt. */
   at(start: number, col: number): string | undefined {
-    const hit = this.entries.find((e) => !e.marker.isDisposed && e.marker.line === start);
-    return hit && col >= (hit.action.from ?? 0) ? hit.action.command : undefined;
+    const hit = this.entries.find(
+      (e) =>
+        !e.marker.isDisposed &&
+        e.marker.line === start &&
+        col >= (e.action.from ?? 0) &&
+        col < (e.action.to ?? Infinity),
+    );
+    return hit?.action.command;
   }
 
   clear(): void {
-    for (const e of [...this.entries]) e.marker.dispose();
+    for (const m of new Set(this.entries.map((e) => e.marker))) m.dispose();
     this.entries = [];
   }
 }

@@ -7,6 +7,8 @@
 /** Erlaubtes Kurz-Flag. Ohne `int` ist es ein Schalter, mit `int` erwartet es eine Zahl. */
 export interface FlagSpec {
   readonly short: string;
+  /** Optionale Langform, z. B. `short` für `--short` (#93). */
+  readonly long?: string;
   readonly description: string;
   readonly int?: { readonly min: number; readonly max: number };
 }
@@ -57,7 +59,7 @@ export const COMMANDS: readonly CommandSpec[] = [
     name: 'steckbrief',
     group: 'me',
     aliases: [],
-    description: 'Zeigt einen Steckbrief von mir: Bild, Infos und neueste Projekte.',
+    description: 'Zeigt einen Steckbrief von mir: Bild, Infos und alle Projekte.',
     usage: 'steckbrief',
     example: 'steckbrief',
     flags: [],
@@ -271,11 +273,11 @@ export const COMMANDS: readonly CommandSpec[] = [
     name: 'help',
     group: 'system',
     aliases: [],
-    description: 'Zeigt alle Commands mit Benutzung und Beispiel.',
-    usage: 'help',
-    example: 'help',
-    flags: [],
-    operands: NONE,
+    description: 'Zeigt alle Commands. --short: Kurzfassung, help <command>: Details.',
+    usage: 'help [-s|--short] [command]',
+    example: 'help --short',
+    flags: [{ short: 's', long: 'short', description: 'Kurzfassung, passt auf einen Bildschirm' }],
+    operands: { min: 0, max: 1, label: 'Command' },
     redirect: true,
   },
   {
