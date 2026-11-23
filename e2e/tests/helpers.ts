@@ -35,4 +35,4 @@ export async function visibleLines(page: Page): Promise<string[]> {
 export const PROMPT_TEXT = 'guest@maxim-os:/$';
 
 /** Ende der help-Ausgabe (letzter Registry-Eintrag), breit als Tabelle oder schmal gestapelt. */
-export const HELP_END = /Beispiel: +reset|reset {2,}reset/;
+export const HELP_END = /Beispiel: +history|history {2,}history/;

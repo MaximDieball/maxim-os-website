@@ -121,6 +121,16 @@ Alle Commands stehen in einer zentralen **Command-Registry**. Jeder Eintrag enth
 
 Gibt eine Liste aller Commands aus, jeweils mit Beschreibung, Benutzung und Beispiel.
 
+**Reihenfolge nach Wichtigkeit für Besucher** (#82), als Gruppen mit Überschrift:
+
+1. **Über mich:** `steckbrief` (ganz oben), `about`, `whoami`
+2. **Projekte und Links:** Commands, die direkt auf Repos oder gehostete Projekte führen: `projects`, `watchthis`, `minecraft`
+3. **Im Terminal ausprobieren:** Projekte, die direkt im Terminal laufen: `snake`, `ask`
+4. **Dateien:** `ls`, `cd`, `pwd`, `cat`, `tree` und die bearbeitenden Commands
+5. **System:** `help`, `clear`, `history`
+
+Neue Commands bekommen in der Registry eine dieser Gruppen; leere Gruppen werden nicht angezeigt.
+
 ### Dateisystem: lesen
 
 | Command | Flags | Beschreibung |

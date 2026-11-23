@@ -11,8 +11,25 @@ export interface FlagSpec {
   readonly int?: { readonly min: number; readonly max: number };
 }
 
+/**
+ * Gruppen in der Reihenfolge, die für Besucher am wichtigsten ist (#82): zuerst über mich,
+ * dann Links zu Repos und gehosteten Projekten, dann Projekte im Terminal, dann der Rest.
+ * Die Registry ist danach sortiert; help zeigt die Gruppen mit Überschrift.
+ */
+export const COMMAND_GROUPS = [
+  { id: 'me', title: 'Über mich' },
+  { id: 'links', title: 'Projekte und Links' },
+  { id: 'play', title: 'Im Terminal ausprobieren' },
+  { id: 'files', title: 'Dateien' },
+  { id: 'system', title: 'System' },
+] as const;
+
+export type CommandGroup = (typeof COMMAND_GROUPS)[number]['id'];
+
 export interface CommandSpec {
   readonly name: string;
+  /** Gruppe für die Sortierung in help (siehe COMMAND_GROUPS). */
+  readonly group: CommandGroup;
   readonly aliases: readonly string[];
   readonly description: string;
   readonly usage: string;
@@ -37,26 +54,52 @@ const MANY = 8;
 
 export const COMMANDS: readonly CommandSpec[] = [
   {
-    name: 'help',
+    name: 'steckbrief',
+    group: 'me',
     aliases: [],
-    description: 'Zeigt alle Commands mit Benutzung und Beispiel.',
-    usage: 'help',
-    example: 'help',
+    description: 'Zeigt einen Steckbrief von mir: Bild, Infos und neueste Projekte.',
+    usage: 'steckbrief',
+    example: 'steckbrief',
     flags: [],
     operands: NONE,
     redirect: true,
   },
   {
-    name: 'clear',
-    aliases: ['cls'],
-    description: 'Leert das Terminal (auch Ctrl+L).',
-    usage: 'clear',
-    example: 'clear',
+    name: 'about',
+    group: 'me',
+    aliases: [],
+    description: 'Worum es bei MAXIM OS geht.',
+    usage: 'about',
+    example: 'about',
     flags: [],
     operands: NONE,
+    redirect: true,
+  },
+  {
+    name: 'whoami',
+    group: 'me',
+    aliases: [],
+    description: 'Zeigt, wer du hier bist.',
+    usage: 'whoami',
+    example: 'whoami',
+    flags: [],
+    operands: NONE,
+    redirect: true,
+  },
+  {
+    name: 'projects',
+    group: 'links',
+    aliases: [],
+    description: 'Listet meine Projekte mit Links (Klick öffnet einen neuen Tab).',
+    usage: 'projects',
+    example: 'projects',
+    flags: [],
+    operands: NONE,
+    redirect: true,
   },
   {
     name: 'ls',
+    group: 'files',
     aliases: [],
     description: 'Listet den Inhalt eines Ordners. -l ausführlich, -a mit versteckten Dateien.',
     usage: 'ls [-l] [-a] [ordner]',
@@ -71,6 +114,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'cd',
+    group: 'files',
     aliases: [],
     description: 'Wechselt den Ordner. Ohne Angabe zurück nach /.',
     usage: 'cd [ordner]',
@@ -81,6 +125,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'pwd',
+    group: 'files',
     aliases: [],
     description: 'Zeigt den aktuellen Ordner.',
     usage: 'pwd',
@@ -91,6 +136,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'cat',
+    group: 'files',
     aliases: [],
     description: 'Zeigt eine Textdatei an.',
     usage: 'cat <datei>',
@@ -102,6 +148,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'tree',
+    group: 'files',
     aliases: [],
     description: 'Zeigt Ordner als Baum. -L begrenzt die Tiefe (1–5).',
     usage: 'tree [-L tiefe] [ordner]',
@@ -113,6 +160,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'mkdir',
+    group: 'files',
     aliases: [],
     description: 'Legt Ordner an. -p legt auch fehlende Zwischenordner an.',
     usage: 'mkdir [-p] <ordner>...',
@@ -124,6 +172,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'touch',
+    group: 'files',
     aliases: [],
     description: 'Legt leere Dateien an oder aktualisiert ihren Zeitstempel.',
     usage: 'touch <datei>...',
@@ -135,6 +184,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'rm',
+    group: 'files',
     aliases: [],
     description: 'Löscht Dateien. -r auch Ordner mit Inhalt, -f ohne Fehler bei fehlenden.',
     usage: 'rm [-r] [-f] <pfad>...',
@@ -149,6 +199,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'rmdir',
+    group: 'files',
     aliases: [],
     description: 'Löscht leere Ordner.',
     usage: 'rmdir <ordner>...',
@@ -160,6 +211,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'mv',
+    group: 'files',
     aliases: [],
     description: 'Verschiebt oder benennt um.',
     usage: 'mv <quelle> <ziel>',
@@ -171,6 +223,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'cp',
+    group: 'files',
     aliases: [],
     description: 'Kopiert Dateien. -r kopiert Ordner mit Inhalt.',
     usage: 'cp [-r] <quelle> <ziel>',
@@ -182,6 +235,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'echo',
+    group: 'files',
     aliases: [],
     description: 'Gibt Text aus, mit > oder >> auch in eine Datei.',
     usage: 'echo <text> [> datei]',
@@ -193,6 +247,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: 'reset',
+    group: 'files',
     aliases: [],
     description: 'Verwirft alle deine Änderungen und stellt das Original wieder her.',
     usage: 'reset',
@@ -200,6 +255,38 @@ export const COMMANDS: readonly CommandSpec[] = [
     flags: [],
     operands: NONE,
     writes: true,
+  },
+  {
+    name: 'help',
+    group: 'system',
+    aliases: [],
+    description: 'Zeigt alle Commands mit Benutzung und Beispiel.',
+    usage: 'help',
+    example: 'help',
+    flags: [],
+    operands: NONE,
+    redirect: true,
+  },
+  {
+    name: 'clear',
+    group: 'system',
+    aliases: ['cls'],
+    description: 'Leert das Terminal (auch Ctrl+L).',
+    usage: 'clear',
+    example: 'clear',
+    flags: [],
+    operands: NONE,
+  },
+  {
+    name: 'history',
+    group: 'system',
+    aliases: [],
+    description: 'Zeigt deine letzten Eingaben.',
+    usage: 'history',
+    example: 'history',
+    flags: [],
+    operands: NONE,
+    redirect: true,
   },
 ];
 
