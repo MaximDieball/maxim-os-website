@@ -8,10 +8,13 @@ import type { KeyValueStore } from '../vfs/workspace.ts';
  */
 
 export const GITHUB_USER = 'MaximDieball';
-export const CACHE_KEY = 'maxim-os:github:v1';
+export const CACHE_KEY = 'maxim-os:github:v2';
+export const README_CACHE_PREFIX = 'maxim-os:readme:v1:';
+export const MAX_README = 64 * 1024;
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const MAX_TEXT = 200;
-const MAX_REPOS = 8;
+/** Alle eigenen Projekte zeigen (#90), mit einer Obergrenze. */
+const MAX_REPOS = 30;
 
 export interface GithubProfile {
   login: string;
@@ -33,12 +36,22 @@ export interface GithubRepo {
   stars?: number;
   url: string;
   homepage?: string;
+  /** Letzter Push (ISO-Datum). */
+  updatedAt?: string;
+}
+
+/** Eigene Angaben aus dem Content-Ordner, z. B. Studium (#91). */
+export interface Fact {
+  label: string;
+  value: string;
 }
 
 export interface GithubData {
   profile: GithubProfile;
   repos: GithubRepo[];
   source: 'github' | 'fallback';
+  /** Eigene Angaben aus content/about/steckbrief.json (immer von dort, #91). */
+  facts?: Fact[];
 }
 
 type Raw = Record<string, unknown>;
@@ -96,7 +109,24 @@ function repoFrom(raw: unknown, api: boolean): GithubRepo | undefined {
     stars: count(api ? raw.stargazers_count : raw.stars),
     url,
     homepage: link(raw.homepage),
+    updatedAt: date(api ? raw.pushed_at : raw.updatedAt),
   };
+}
+
+function date(v: unknown): string | undefined {
+  const t = text(v);
+  return t && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(t) ? t : undefined;
+}
+
+/** Fakten aus steckbrief.json: nur Einträge mit Label und Wert. */
+export function parseFacts(raw: unknown): Fact[] {
+  if (!isObj(raw) || !Array.isArray(raw.facts)) return [];
+  return raw.facts.flatMap((f) => {
+    if (!isObj(f)) return [];
+    const label = text(f.label);
+    const value = text(f.value);
+    return label && value ? [{ label: label.slice(0, 40), value }] : [];
+  });
 }
 
 const repoList = (raw: unknown, api: boolean): GithubRepo[] =>
@@ -163,7 +193,7 @@ export async function loadGithub(options: LoadOptions = {}): Promise<GithubData 
     };
     const [rawProfile, rawRepos] = await Promise.all([
       get(base),
-      get(`${base}/repos?sort=updated&per_page=20`),
+      get(`${base}/repos?sort=pushed&per_page=100`),
     ]);
     if (!isObj(rawProfile)) return undefined;
     const profile = profileFrom(rawProfile, true);
@@ -175,6 +205,49 @@ export async function loadGithub(options: LoadOptions = {}): Promise<GithubData 
       // Cache ist optional
     }
     return data;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Repo-Namen, wie GitHub sie erlaubt; alles andere wird gar nicht erst angefragt. */
+const REPO_NAME = /^[A-Za-z0-9._-]{1,100}$/;
+
+/**
+ * Lädt die README eines eigenen Repos als Rohtext (#89). Gecacht in der Sitzung,
+ * auf MAX_README Zeichen gekürzt. `undefined` ohne README oder bei Fehlern.
+ */
+export async function loadReadme(
+  repo: string,
+  options: LoadOptions = {},
+): Promise<string | undefined> {
+  if (!REPO_NAME.test(repo) || repo.startsWith('.')) return undefined;
+  const user = options.user ?? GITHUB_USER;
+  const doFetch = options.fetch ?? fetch;
+  const key = README_CACHE_PREFIX + repo;
+  try {
+    const cached = options.storage?.getItem(key);
+    if (cached !== null && cached !== undefined) return cached || undefined;
+  } catch {
+    // ohne Cache weiter
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 5000);
+  try {
+    const res = await doFetch(
+      `https://api.github.com/repos/${encodeURIComponent(user)}/${encodeURIComponent(repo)}/readme`,
+      { signal: controller.signal, headers: { accept: 'application/vnd.github.raw' } },
+    );
+    if (!res.ok) return undefined;
+    const body = (await res.text()).slice(0, MAX_README);
+    try {
+      options.storage?.setItem(key, body);
+    } catch {
+      // Cache ist optional
+    }
+    return body || undefined;
   } catch {
     return undefined;
   } finally {

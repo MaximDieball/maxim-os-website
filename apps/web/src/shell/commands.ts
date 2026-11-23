@@ -2,8 +2,8 @@ import { COMMANDS } from '@maxim-os/shared';
 import { MSG, VfsError, type VNode } from '../vfs/vfs.ts';
 import type { Workspace } from '../vfs/workspace.ts';
 import { clean, formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
-import { formatProjects, formatSteckbrief } from '../profile/format.ts';
-import { parseProfileData, type GithubData } from '../profile/github.ts';
+import { formatProject, formatProjects, formatSteckbrief } from '../profile/format.ts';
+import { parseFacts, parseProfileData, type GithubData } from '../profile/github.ts';
 import { formatHelp } from './help.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
 import { style } from './text.ts';
@@ -201,16 +201,22 @@ function readLines(ws: Workspace | undefined, path: string): string[] | undefine
   }
 }
 
-/** GitHub-Daten, sonst der Fallback aus content/about/steckbrief.json. */
-async function profileData(ctx: CommandContext): Promise<GithubData | undefined> {
-  const live = await ctx.services.github?.();
-  if (live) return live;
+/**
+ * GitHub-Daten, sonst der Fallback aus content/about/steckbrief.json. Eigene Fakten
+ * (z. B. Studium, #91) kommen immer aus der Datei.
+ */
+export async function profileData(
+  ctx: Pick<CommandContext, 'services' | 'ws'>,
+): Promise<GithubData | undefined> {
+  let file: unknown;
   try {
     const raw = ctx.ws?.fs.readText('/about/steckbrief.json');
-    return raw ? parseProfileData(JSON.parse(raw)) : undefined;
+    file = raw ? JSON.parse(raw) : undefined;
   } catch {
-    return undefined;
+    file = undefined;
   }
+  const data = (await ctx.services.github?.()) ?? parseProfileData(file);
+  return data && { ...data, facts: parseFacts(file) };
 }
 
 const NO_PROFILE = 'Daten nicht verfügbar (GitHub nicht erreichbar, kein Fallback).';
@@ -222,14 +228,39 @@ const steckbrief: ClientHandler = async (ctx) => {
     wide: readLines(ctx.ws, '/about/portrait.txt'),
     narrow: readLines(ctx.ws, '/about/portrait-narrow.txt'),
   };
-  ctx.out.print(formatSteckbrief(data, portrait, ctx.out.cols()));
+  const { lines, actions } = formatSteckbrief(data, portrait, ctx.out.cols());
+  ctx.out.print(lines, actions);
 };
 
 const projects: ClientHandler = async (ctx) => {
   const data = await profileData(ctx);
   if (!data) return ctx.shell.error(`projects: ${NO_PROFILE}`);
-  ctx.out.print(formatProjects(data.repos, ctx.out.cols()));
+  const { lines, actions } = formatProjects(data.repos, ctx.out.cols());
+  ctx.out.print(lines, actions);
 };
+
+const project: ClientHandler = async (ctx) => {
+  const data = await profileData(ctx);
+  if (!data) return ctx.shell.error(`project: ${NO_PROFILE}`);
+  const wanted = ctx.operands[0]!;
+  const repo = data.repos.find((r) => r.name.toLowerCase() === wanted.toLowerCase());
+  if (!repo) {
+    ctx.shell.error(`project: ${wanted}: Projekt nicht gefunden. Vorhanden:`);
+    const list = formatProjects(data.repos, ctx.out.cols());
+    return ctx.out.print(list.lines, list.actions);
+  }
+  const readme = await ctx.services.readme?.(repo.name);
+  if (ctx.signal?.aborted) return;
+  const { lines, actions } = formatProject(repo, readme, ctx.out.cols());
+  ctx.out.print(lines, actions);
+};
+
+/** Vervollständigung für Operanden, die keine Pfade sind (z. B. Projektnamen). */
+export const OPERAND_COMPLETIONS: Readonly<
+  Record<string, (ctx: Pick<CommandContext, 'services' | 'ws'>) => Promise<string[]>>
+> = Object.freeze({
+  project: async (ctx) => (await profileData(ctx))?.repos.map((r) => r.name) ?? [],
+});
 
 const ABOUT_DEFAULT = [
   'MAXIM OS ist meine persönliche Website im Stil eines Terminals.',
@@ -271,6 +302,7 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   reset,
   steckbrief,
   projects,
+  project,
   about,
   whoami,
   history,

@@ -43,6 +43,7 @@ export function wrap(text: string, width: number): string[] {
 export const style = {
   bold: (s: string) => `\x1b[1m${s}\x1b[22m`,
   dim: (s: string) => `\x1b[2m${s}\x1b[22m`,
+  underline: (s: string) => `\x1b[4m${s}\x1b[24m`,
   red: (s: string) => `\x1b[31m${s}\x1b[39m`,
   green: (s: string) => `\x1b[32m${s}\x1b[39m`,
   yellow: (s: string) => `\x1b[33m${s}\x1b[39m`,

@@ -96,9 +96,9 @@ export function createNativeInput(
 
   // Ausgaben laufen über diesen Kanal, damit sie nie mitten im Prompt landen.
   const out: ShellOutput = {
-    print(lines) {
+    print(lines, actions) {
       commit();
-      view.output.print(lines);
+      view.output.print(lines, actions);
     },
     clear() {
       shown = false;
@@ -133,11 +133,8 @@ export function createNativeInput(
     });
   };
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    input.focus({ preventScroll: true });
-    const line = sanitizeInput(input.value);
-    input.value = '';
+  /** Schickt eine Zeile ab: wartende Frage beantworten, puffern oder ausführen. */
+  const submit = (line: string): void => {
     if (shell.inputPrompt) {
       // Antwort auf eine Frage der Shell (z. B. reset: y/N).
       draw({ value: line, caret: line.length, focused: false });
@@ -153,6 +150,14 @@ export function createNativeInput(
     draw({ value: line, caret: line.length, focused: false });
     commit();
     run(line);
+  };
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    input.focus({ preventScroll: true });
+    const line = sanitizeInput(input.value);
+    input.value = '';
+    submit(line);
   });
 
   const editor: LineEditor = {
@@ -195,6 +200,13 @@ export function createNativeInput(
     start() {
       draw();
       editor.focus();
+    },
+    run(line) {
+      // Klick während einer Frage (y/N) nicht als Antwort werten.
+      if (shell.inputPrompt) return;
+      // Angefangene Eingabe verwerfen: das Command steht statt ihrer in der Zeile.
+      input.value = '';
+      submit(sanitizeInput(line));
     },
     notify(lines) {
       out.print(lines);

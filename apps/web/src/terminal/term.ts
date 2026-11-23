@@ -1,5 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit';
-import { bindLinks } from './links.ts';
+import { bindLinks, LineActions } from './links.ts';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { ShellOutput } from '../shell/shell.ts';
@@ -19,6 +19,8 @@ const NARROW_PX = 480;
 export interface TerminalView {
   term: Terminal;
   output: ShellOutput;
+  /** Setzt, was ein Klick auf eine klickbare Zeile ausführt (#90). */
+  onAction(run: (command: string) => void): void;
   /** Passt Schriftgröße und Spalten an den Container an und scrollt nach unten. */
   fit(): void;
 }
@@ -52,8 +54,14 @@ export function createTerminal(
   term.open(container);
   // Links (http/https) per Klick bzw. Tippen in einem neuen Tab öffnen, ohne Zugriff auf diese Seite.
   const screenEl = container.querySelector<HTMLElement>('.xterm-screen');
+  const actions = new LineActions();
+  let runAction: ((command: string) => void) | undefined;
   if (screenEl)
-    bindLinks(term, screenEl, (url) => window.open(url, '_blank', 'noopener,noreferrer'));
+    bindLinks(term, screenEl, {
+      open: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
+      actions,
+      run: (command) => runAction?.(command),
+    });
   // Den Cursor zeichnet die Prompt-Zeile selbst (prompt-line.ts).
   term.write('\x1b[?25l');
 
@@ -65,16 +73,34 @@ export function createTerminal(
   };
 
   const output: ShellOutput = {
-    print(lines) {
-      term.write(`${lines.join('\r\n')}\r\n`, () => term.scrollToBottom());
+    print(lines, lineActions) {
+      if (!lineActions?.some(Boolean)) {
+        term.write(`${lines.join('\r\n')}\r\n`, () => term.scrollToBottom());
+      } else {
+        // Zeilenweise schreiben und vor jeder klickbaren Zeile einen Marker setzen.
+        lines.forEach((line, i) => {
+          const action = lineActions[i];
+          if (action) term.write('', () => actions.add(term.registerMarker(0), action));
+          term.write(`${line}\r\n`);
+        });
+        term.write('', () => term.scrollToBottom());
+      }
       live.announce(lines.map(stripAnsi).join('\n'));
     },
     clear() {
+      actions.clear();
       term.write('\x1b[2J\x1b[3J\x1b[H');
       term.clear();
     },
     cols: () => term.cols,
   };
 
-  return { term, output, fit };
+  return {
+    term,
+    output,
+    fit,
+    onAction: (run) => {
+      runAction = run;
+    },
+  };
 }

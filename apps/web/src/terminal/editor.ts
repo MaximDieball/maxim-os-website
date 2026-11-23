@@ -12,6 +12,8 @@ export interface LineEditor {
   start(): void;
   /** Zeichnet die Prompt-Zeile neu (nach Größenänderung). */
   redraw(): void;
+  /** Führt eine Zeile aus, als wäre sie getippt worden (klickbare Zeilen, #90). */
+  run(line: string): void;
   /** Gibt einen Hinweis aus und zeichnet danach den Prompt neu. */
   notify(lines: string[]): void;
 }

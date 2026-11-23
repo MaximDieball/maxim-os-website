@@ -9,6 +9,12 @@
     "publicRepos": 4,
     "followers": 4
   },
+  "facts": [
+    {
+      "label": "Studium",
+      "value": "Angewandte Informatik an der Nordakademie, dualer Student"
+    }
+  ],
   "repos": [
     {
       "name": "maxim-os-website",

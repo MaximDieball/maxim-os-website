@@ -124,7 +124,7 @@ Gibt eine Liste aller Commands aus, jeweils mit Beschreibung, Benutzung und Beis
 **Reihenfolge nach Wichtigkeit für Besucher** (#82), als Gruppen mit Überschrift:
 
 1. **Über mich:** `steckbrief` (ganz oben), `about`, `whoami`
-2. **Projekte und Links:** Commands, die direkt auf Repos oder gehostete Projekte führen: `projects`, `watchthis`, `minecraft`
+2. **Projekte und Links:** Commands, die direkt auf Repos oder gehostete Projekte führen: `projects`, `project`, `watchthis`, `minecraft`
 3. **Im Terminal ausprobieren:** Projekte, die direkt im Terminal laufen: `snake`, `ask`
 4. **Dateien:** `ls`, `cd`, `pwd`, `cat`, `tree` und die bearbeitenden Commands
 5. **System:** `help`, `clear`, `history`
@@ -181,7 +181,7 @@ Zeigt einen Steckbrief von mir. Die Daten kommen von GitHub (Profil, Repos): Der
 
 ### Weitere Basis-Commands (clientseitig)
 
-`clear`, `projects` (Liste meiner Projekte mit Links, Anzeige im Terminal oder neuer Tab), `about`, `whoami`, `history`. Unbekannte Commands geben `command not found: <name>. Tippe 'help'.` aus.
+`clear`, `projects` (Liste aller meiner Projekte; ein Klick auf ein Projekt führt `project <name>` aus, statt direkt auf eine externe Seite zu springen), `project <name>` (Projektseite: Name, Beschreibung, Sprache, Sterne, letztes Update, Links zu GitHub und Website, darunter die README als Text; Namen per Tab vervollständigbar), `about`, `whoami`, `history`. Im `steckbrief` stehen ebenfalls alle Projekte als klickbare Liste, dazu eigene Angaben aus `content/about/steckbrief.json` (`facts`, z. B. Studium: Angewandte Informatik an der Nordakademie, dualer Student). Unbekannte Commands geben `command not found: <name>. Tippe 'help'.` aus.
 
 ### Terminal-UX
 

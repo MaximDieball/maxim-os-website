@@ -446,11 +446,63 @@ describe('profile commands', () => {
     expect(lines.at(-1)).toContain('steckbrief: Daten nicht verfügbar');
   });
 
-  it('projects lists repos with links', async () => {
+  it('projects lists repos as clickable lines', async () => {
+    const actions: string[] = [];
     const { out, lines } = fakeOutput(80);
+    out.print = (l, a) => {
+      lines.push(...l.map(stripAnsi));
+      a?.forEach((x) => x && actions.push(x.command));
+    };
     const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), { github: async () => GH });
     await sh.execute('projects');
-    expect(lines.join('\n')).toContain('https://github.com/MaximDieball/maxim-os-website');
+    expect(lines.join('\n')).toContain('maxim-os-website');
+    expect(actions).toContain('project maxim-os-website');
+  });
+
+  it('project shows info and README of a repo, case-insensitive', async () => {
+    const asked: string[] = [];
+    const { out, lines } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), {
+      github: async () => GH,
+      readme: async (r) => (asked.push(r), '# Mein Projekt\n\nText'),
+    });
+    await sh.execute('project MAXIM-os-website');
+    expect(asked).toEqual(['maxim-os-website']);
+    const text = lines.join('\n');
+    expect(text).toContain('https://github.com/MaximDieball/maxim-os-website');
+    expect(text).toContain('Mein Projekt');
+  });
+
+  it('project lists the projects for unknown names', async () => {
+    const { out, lines } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), { github: async () => GH });
+    await sh.execute('project nope');
+    expect(lines.join('\n')).toContain('project: nope: Projekt nicht gefunden');
+    expect(lines.join('\n')).toContain('maxim-os-website');
+    await sh.execute('project');
+    expect(lines.at(-1)).toMatch(/project/);
+  });
+
+  it('completes project names', async () => {
+    const { out } = fakeOutput(80);
+    const sh = new Shell(out, Workspace.open(SNAP, memoryStore()), { github: async () => GH });
+    expect(await sh.complete('project max')).toBe('project maxim-os-website ');
+  });
+
+  it('steckbrief always shows the facts from the content folder', async () => {
+    const snap = structuredClone(FALLBACK_SNAP);
+    const about = snap.root.children.find((c) => c.name === 'about') as {
+      children: { name: string; text?: string }[];
+    };
+    about.children[0]!.text = JSON.stringify({
+      profile: { login: 'Offline', htmlUrl: 'https://github.com/Offline' },
+      facts: [{ label: 'Studium', value: 'Nordakademie' }],
+    });
+    const { out, lines } = fakeOutput(40);
+    const sh = new Shell(out, Workspace.open(snap, memoryStore()), { github: async () => GH });
+    await sh.execute('steckbrief');
+    expect(lines.join('\n')).toContain('Maxim');
+    expect(lines.join('\n')).toContain('Nordakademie');
   });
 
   it('about prints about.txt, whoami says guest, history numbers the input', async () => {

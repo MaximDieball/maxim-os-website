@@ -13,7 +13,7 @@ import { bindTouchScroll } from './terminal/touch-scroll.ts';
 import { trackVisualViewport } from './terminal/viewport.ts';
 import { THEME as theme } from './theme/theme.ts';
 import { loadWorkspace } from './vfs/load.ts';
-import { loadGithub, sessionStore } from './profile/github.ts';
+import { loadGithub, loadReadme, sessionStore } from './profile/github.ts';
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -46,8 +46,14 @@ async function boot(): Promise<void> {
     form,
     input,
     view,
-    (out) => new Shell(out, workspace, { github: () => loadGithub({ storage: sessionStore() }) }),
+    (out) =>
+      new Shell(out, workspace, {
+        github: () => loadGithub({ storage: sessionStore() }),
+        readme: (repo) => loadReadme(repo, { storage: sessionStore() }),
+      }),
   );
+  // Klickbare Zeilen (z. B. Projekte) führen ihr Command aus, als wäre es getippt.
+  view.onAction((command) => editor.run(command));
 
   trackVisualViewport(app, () => {
     view.fit();
