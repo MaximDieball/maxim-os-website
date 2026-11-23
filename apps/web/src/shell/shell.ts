@@ -9,7 +9,8 @@ import {
 } from '@maxim-os/shared';
 import { VfsError } from '../vfs/vfs.ts';
 import type { GithubData } from '../profile/github.ts';
-import type { Workspace } from '../vfs/workspace.ts';
+import type { GameScreen } from '../games/run-snake.ts';
+import type { KeyValueStore, Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
 import { clean } from './format.ts';
 import { History } from './history.ts';
@@ -70,6 +71,12 @@ export interface ShellServices {
   github?: () => Promise<GithubData | undefined>;
   /** Wartet `ms` Millisekunden; endet sofort bei Abbruch (im Test ersetzbar). */
   delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Spielbildschirm im Terminal (#32). */
+  gameScreen?: () => GameScreen;
+  /** Handy bzw. Touch-Gerät ohne feinen Zeiger: Minigames werden nicht unterstützt (#33). */
+  isMobile?: () => boolean;
+  /** Dauerhafter Speicher (localStorage), z. B. für den Highscore. */
+  storage?: KeyValueStore;
   /** Öffnet eine Seite in einem neuen Tab (ohne Zugriff auf diese Seite). */
   openUrl?: (url: string) => void;
   /** README eines eigenen Repos als Markdown (#89). */

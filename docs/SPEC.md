@@ -171,6 +171,7 @@ Ein Snake-Spiel, das mit dem Command gestartet und gespielt wird. Es ist komplet
 - Steuerung per Pfeiltasten und WASD. Auf Mobilgeräten wird das Spiel **nicht unterstützt** (siehe Abschnitt 4a: Warnung vor dem Start).
 - **Beenden:** `Ctrl+C` und `Esc`. Das muss auf Mac und Windows mit verschiedenen Tastaturlayouts funktionieren. Auf Mac ist die Taste `Ctrl` (nicht `Cmd`). Browser-Kollisionen mit Copy (Windows) beachten und im Spielmodus abfangen. Zusätzlich gibt es **oben links ein ✕**, mit dem man das Spiel verlässt.
 - Zeige Score und Highscore (lokal, im `localStorage`).
+- Umsetzung: eigener Bildschirm (alternativer Terminal-Bildschirm), Spielfeld bis 30×20 Zellen, passt sich an kleine Terminals an; keine Zeile ist breiter als das Spielfeld. Game over: Enter startet neu, Esc beendet. Danach steht das Ergebnis im Terminal.
 
 ### watchthis (Aliase: `wt`, `WatchThis`)
 

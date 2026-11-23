@@ -121,6 +121,16 @@ export const COMMANDS: readonly CommandSpec[] = [
     operands: NONE,
   },
   {
+    name: 'snake',
+    group: 'play',
+    aliases: [],
+    description: 'Snake im Terminal. Pfeile/WASD lenken, Esc oder Ctrl+C beendet.',
+    usage: 'snake',
+    example: 'snake',
+    flags: [],
+    operands: NONE,
+  },
+  {
     name: 'ls',
     group: 'files',
     aliases: [],

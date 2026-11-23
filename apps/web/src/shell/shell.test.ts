@@ -4,6 +4,8 @@ import type { GithubData } from '../profile/github.ts';
 import { Workspace, type KeyValueStore } from '../vfs/workspace.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
 import { suggestionsIn } from './suggest.ts';
+import type { GameScreen } from '../games/run-snake.ts';
+import { gameKeyFor } from '../terminal/game-screen.ts';
 import { History } from './history.ts';
 import { sanitizeInput, stripAnsi } from './text.ts';
 import { Shell, type LineAction, type ShellOutput } from './shell.ts';
@@ -72,7 +74,11 @@ describe('formatHelp', () => {
     expect(first('steckbrief')).toBeLessThan(first('projects'));
     expect(first('projects')).toBeLessThan(first('ls'));
     expect(first('ls')).toBeLessThan(first('help'));
-    expect(lines).not.toContain('Im Terminal ausprobieren'); // leer, solange es keine Spiele gibt
+    // Spiele nach den Links, vor den Dateien
+    expect(lines.indexOf('Im Terminal ausprobieren')).toBeGreaterThan(
+      lines.indexOf('Projekte und Links'),
+    );
+    expect(lines.indexOf('Im Terminal ausprobieren')).toBeLessThan(lines.indexOf('Dateien'));
   });
 
   it('lists every registry command with description, usage and example', () => {
@@ -231,6 +237,64 @@ describe('watchthis (#34)', () => {
     controller.abort();
     await sh.execute('watchthis', controller.signal);
     expect(opened).toEqual([]);
+  });
+});
+
+describe('snake (#32, #33)', () => {
+  function game(mobile: boolean) {
+    const { out, lines } = fakeOutput(80);
+    let entered = 0;
+    const screen: GameScreen = {
+      enter: () => (entered++, { cols: 80, rows: 24 }),
+      draw: () => {},
+      onKey: (h) => (h('quit'), () => {}),
+      leave: () => {},
+    };
+    const sh = new Shell(out, undefined, {
+      gameScreen: () => screen,
+      isMobile: () => mobile,
+      delay: async () => {},
+    });
+    return { sh, lines, entered: () => entered };
+  }
+
+  it('starts the game on desktop and reports the score afterwards', async () => {
+    const { sh, lines, entered } = game(false);
+    await sh.execute('snake');
+    expect(entered()).toBe(1);
+    expect(lines.join('\n')).toContain('Snake beendet. Score 0');
+  });
+
+  it('warns on phones and cancels by default', async () => {
+    const { sh, lines, entered } = game(true);
+    const run = sh.execute('snake');
+    expect(await question(sh)).toContain('Snake wird auf Handys nicht unterstützt');
+    sh.answer('');
+    await run;
+    expect(entered()).toBe(0);
+    expect(lines.at(-1)).toBe('Abgebrochen.');
+  });
+
+  it('starts anyway on phones after y', async () => {
+    const { sh, entered } = game(true);
+    const run = sh.execute('snake');
+    await question(sh);
+    sh.answer('y');
+    await run;
+    expect(entered()).toBe(1);
+  });
+});
+
+describe('gameKeyFor', () => {
+  it('maps arrows, layout-independent WASD, Esc and Ctrl+C', () => {
+    const k = (key: string, code = '', ctrlKey = false) => gameKeyFor({ key, code, ctrlKey });
+    expect(k('ArrowUp')).toBe('up');
+    expect(k('z', 'KeyW')).toBe('up'); // AZERTY: physische W-Taste
+    expect(k('a', 'KeyA')).toBe('left');
+    expect(k('Escape')).toBe('quit');
+    expect(k('c', 'KeyC', true)).toBe('quit');
+    expect(k('Enter')).toBe('confirm');
+    expect(k('x', 'KeyX')).toBeUndefined();
   });
 });
 

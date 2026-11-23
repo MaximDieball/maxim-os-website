@@ -65,3 +65,15 @@ test('project page with download link', async ({ page }, info) => {
   await page.waitForTimeout(300);
   await page.screenshot(shot(info.project.name, '06-project'));
 });
+
+test('snake', async ({ page }, info) => {
+  await openTerminal(page);
+  await run(page, 'snake');
+  if (info.project.name !== 'desktop') {
+    await page.keyboard.type('y');
+    await page.keyboard.press('Enter');
+  }
+  await page.waitForTimeout(800);
+  await page.screenshot(shot(info.project.name, '07-snake'));
+  await page.keyboard.press('Escape');
+});

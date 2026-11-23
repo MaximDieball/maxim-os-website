@@ -9,6 +9,7 @@ import {
   parseProjectLinks,
   type GithubData,
 } from '../profile/github.ts';
+import { runSnake } from '../games/run-snake.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
 import { keepTogether, withSuggestions } from './suggest.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
@@ -322,6 +323,35 @@ const watchthis: ClientHandler = async (ctx) => {
   ]);
 };
 
+/**
+ * `snake` (#32). Auf Handys zuerst eine Warnung mit (y/N), Standard ist Abbruch (#33):
+ * Es gibt keine Touch-Steuerung.
+ */
+const snake: ClientHandler = async (ctx) => {
+  const screen = ctx.services.gameScreen?.();
+  if (!screen) return ctx.shell.error('snake: Spiele sind hier nicht verfügbar.');
+  if (ctx.services.isMobile?.()) {
+    const ok = await ctx.shell.confirm(
+      `${style.yellow('⚠')} Snake wird auf Handys nicht unterstützt. Trotzdem starten?`,
+      ctx.signal,
+    );
+    if (!ok) return ctx.out.print([style.dim('Abgebrochen.')]);
+  }
+  const result = await runSnake(screen, {
+    signal: ctx.signal,
+    storage: ctx.services.storage,
+    delay: ctx.services.delay,
+  });
+  if (!result.ok) {
+    return ctx.shell.error('snake: Das Terminal ist zu klein für das Spielfeld.');
+  }
+  const { lines, actions } = withSuggestions([
+    `Snake beendet. Score ${result.score} · Highscore ${result.highscore}`,
+    style.dim("Nochmal: 'snake'"),
+  ]);
+  ctx.out.print(lines, actions);
+};
+
 /** Vervollständigung für Operanden, die keine Pfade sind (z. B. Projektnamen). */
 export const OPERAND_COMPLETIONS: Readonly<
   Record<string, (ctx: Pick<CommandContext, 'services' | 'ws'>) => Promise<string[]>>
@@ -410,6 +440,7 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   projects,
   project,
   watchthis,
+  snake,
   about,
   whoami,
   history,
