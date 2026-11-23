@@ -5,6 +5,7 @@ import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
 import { withSuggestions } from './shell/suggest.ts';
 import { createGameScreen } from './terminal/game-screen.ts';
+import { createSuggestions } from './terminal/suggestions.ts';
 import { browserStorage } from './vfs/workspace.ts';
 import { FS_UNAVAILABLE, Shell } from './shell/shell.ts';
 import { style } from './shell/text.ts';
@@ -67,10 +68,28 @@ async function boot(): Promise<void> {
   );
   // Klickbare Zeilen (z. B. Projekte) führen ihr Command aus, als wäre es getippt.
   view.onAction((command) => editor.run(command));
+  // Vorschläge auf dem Startscreen (#99): weg nach dem ersten Command; ausgeblendet,
+  // solange sie Prompt oder Ausgabe überdecken würden.
+  const suggestions = createSuggestions(
+    byId('suggestions'),
+    (command) => editor.run(command),
+    () => {
+      // Unterkante der Prompt-Zeile, direkt aus dem Terminal (Cursor steht im Prompt)
+      const screen = termEl.querySelector<HTMLElement>('.xterm-screen');
+      if (!screen || !view.term.rows) return Infinity;
+      const r = screen.getBoundingClientRect();
+      return r.top + ((view.term.buffer.active.cursorY + 1) * r.height) / view.term.rows + 6;
+    },
+  );
+  // Erst messen, wenn xterm.js alles geschrieben hat
+  const updateSuggestions = (): void =>
+    view.term.write('', () => requestAnimationFrame(() => suggestions.update()));
+  editor.onSubmit = () => suggestions.dismiss();
 
   trackVisualViewport(app, () => {
     view.fit();
     editor.redraw();
+    updateSuggestions();
   });
   const quickkeys = byId('quickkeys');
   bindQuickKeys(quickkeys, () => editor);
@@ -90,7 +109,7 @@ async function boot(): Promise<void> {
         return measured > 0 ? measured : (view.term.options.fontSize ?? 15) * 1.15;
       },
     },
-    (el) => quickkeys.contains(el),
+    (el) => quickkeys.contains(el) || byId('suggestions').contains(el),
     debugTouch,
   );
 
@@ -117,6 +136,7 @@ async function boot(): Promise<void> {
   });
   await matrix;
   document.documentElement.dataset.booted = 'true';
+  updateSuggestions();
   editor.focus();
 }
 
