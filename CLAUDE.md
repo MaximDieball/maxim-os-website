@@ -71,6 +71,20 @@ Durch die Client-first-Architektur ist der Server nur noch ein kleines Angriffsz
 - Die Command-Registry (Name, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumente) ist die einzige Quelle für `help` und für die Flag-Allowlist.
 - Commit-Messages kurz und aussagekräftig, kleine Commits, nach jedem Meilenstein ein Commit/Tag.
 
+## Arbeitsweise und Rückfragen
+
+Der Agent arbeitet **selbstständig** und fragt nicht bei jedem Schritt nach. Ohne Rückfrage erlaubt:
+
+- Branches anlegen, committen, pushen, Pull Requests öffnen.
+- PRs nach **grüner CI** in `main` mergen.
+- Tickets, Board-Status, Epics, Meilenstein-Zuordnung und Tags pflegen.
+
+Der Agent **hält an und fragt**, wenn:
+
+- der Besitzer etwas **entscheiden** muss (z. B. Design-, Logo- oder Modellwahl, Inhalte über ihn selbst, unklare Anforderungen);
+- ein **Meilenstein fertig** ist: Bevor das Epic geschlossen, der Tag `mvp-N` gesetzt und der nächste Meilenstein begonnen wird, stellt der Agent den Stand vor (was geht, wie man es ansieht) und wartet auf das OK des Besitzers;
+- etwas **nicht rückgängig** zu machen ist oder über das Repo hinausgeht: Löschen von Branches, Tags oder Daten ohne Weg zurück, Force-Push, Änderungen an Repo-Einstellungen (z. B. Branch-Protection), Aktionen außerhalb dieses Repos.
+
 ## Ticket-Regel (GitHub Kanban)
 
 **Ohne Ticket wird nichts gemacht.** Jede Änderung (Code, Tests, Docs, Config, Refactoring) gehört zu einem GitHub-Issue auf dem Kanban-Board (GitHub Projects) des Repos `maxim-os-website`.
