@@ -3,6 +3,8 @@
 Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln zu Techstack, Architektur, Docker, Sicherheit und Entwicklung. Dieses Dokument beschreibt die Features und die Arbeitsweise.
 
 > **v4 (Client-first):** Gegenüber v3 läuft fast alles im Browser. Der Server liefert nur noch einen Snapshot des Content-Ordners. Alle Commands arbeiten auf einer Kopie im Browser, deshalb gibt es jetzt auch bearbeitende Commands. Abschnitt 2 beschreibt das Modell, Abschnitt 5 was an Sicherheitsmaßnahmen dadurch entfällt.
+>
+> **v4.1 (KI-Assistent):** Ein zweiter Container hostet ein kleines Sprachmodell, das man im Terminal mit `ask` fragen kann (Abschnitt 4b). Dafür gibt es einen eigenen Meilenstein vor dem Release.
 
 ---
 
@@ -32,9 +34,8 @@ Lies zuerst die `CLAUDE.md` im Repo-Root. Sie enthält die verbindlichen Regeln 
 4. **Steckbrief und Design:** Design-Auswahl (Schrift und Theme), neues Logo, `steckbrief` mit GitHub-Daten und vorgerendertem ASCII-Bild, dazu `about`, `whoami`, `projects`, `history`.
 5. **Spiele und Links:** `snake` und `watchthis`.
 6. **Minecraft:** `minecraft`-Übersicht mit Status, Spielern und Ping.
-7. **Release-Reife:** Production-Image, `docker-compose.prod.yml`, Härtung, mobiler Feinschliff, README mit Übergabe-Anleitung (siehe Abschnitt 9).
-
-Die bestehenden Tickets der früheren Meilensteine `mvp-3` bis `mvp-6` werden auf `mvp-4` bis `mvp-7` umgehängt.
+7. **KI-Assistent:** Spike zur Modellwahl auf der Ziel-Hardware, `llm`-Container (llama.cpp) mit GPU- und CPU-Variante, `POST /api/ask` mit Streaming, Command `ask`, Tests mit Fake-Modell, kurzes Review (Abschnitt 4b).
+8. **Release-Reife:** Production-Image, `docker-compose.prod.yml` (inkl. KI-Container), Härtung, mobiler Feinschliff, README mit Übergabe-Anleitung (siehe Abschnitt 9).
 
 ---
 
@@ -48,6 +49,7 @@ Browser                                              Server (Fastify)
 │  ← Snapshot (Original)                    │ /api/fs │  (read-only, ohne Symlinks)   │
 │  ← lokale Änderungen (localStorage)       │         │ statisches Frontend           │
 │ Alle Commands laufen hier                 │         │ /api/health, später Minecraft │
+│ ask: Fragen an den KI-Assistenten  ───────┼──POST──►│ /api/ask ──► llm (intern)     │
 └──────────────────────────────────────────┘         └───────────────────────────────┘
 ```
 
@@ -204,6 +206,67 @@ Direkt über der Tastatur gibt es die Tasten, die mobil fehlen: `Tab`, `↑`, `�
 
 ---
 
+## 4b. KI-Assistent (`ask`)
+
+Ein zweiter Container hostet ein kleines Sprachmodell. Im Terminal stellt man ihm mit `ask` Fragen, die Antwort erscheint Wort für Wort.
+
+### Command
+
+| Command | Flags | Beschreibung |
+| --- | --- | --- |
+| `ask <frage>` | `-n` | Fragt den KI-Assistenten. Die Antwort wird gestreamt. `-n` beginnt ein neues Gespräch. |
+
+- Der Browser merkt sich die letzten 4 Frage-Antwort-Paare der Sitzung (nur im Speicher) und schickt sie als Kontext mit. `clear` leert nur den Bildschirm; den Verlauf verwerfen nur `ask -n` oder ein Neuladen der Seite.
+- `Ctrl+C` bricht eine laufende Antwort ab, der Server bricht dann auch die Anfrage an das Modell ab.
+- Während das Modell rechnet, zeigt das Terminal einen kurzen Hinweis (z. B. `denkt nach …`). Ist der KI-Container nicht erreichbar oder ausgelastet, kommt eine freundliche Meldung (`Der KI-Assistent ist gerade nicht erreichbar.` bzw. `… ist gerade beschäftigt, versuch es gleich nochmal.`).
+- Die Antwort wird wie jede Ausgabe gefiltert (keine Escape-Sequenzen) und bricht auf schmalen Bildschirmen sinnvoll um. Umleitung mit `>` ist erlaubt (`ask ... > antwort.txt`).
+- Der Assistent hat eine feste Rolle (Systemprompt auf dem Server): Er beantwortet Fragen rund um MAXIM OS, mich und meine Projekte, antwortet kurz und auf Deutsch, außer man fragt ihn in einer anderen Sprache. Er hat **keine Werkzeuge**, kann keine Commands ausführen und keine Dateien lesen. Optional bekommt er öffentliche Infos (z. B. aus `content/about/`) als Kontext im Systemprompt.
+
+### Architektur
+
+```
+Browser ──POST /api/ask──► Fastify (app) ──HTTP, internes Netz──► llm (llama.cpp-Server)
+        ◄── Text-Stream ──                ◄── Token-Stream ─────
+```
+
+- **`llm`-Container:** llama.cpp-Server (`llama-server`, OpenAI-kompatibel, `/v1/chat/completions` mit Streaming, `/health`). Ein festes GGUF-Modell aus einem Read-only-Volume. Kein veröffentlichter Port, nur im internen Docker-Netz, kein Internetzugang (`internal: true`).
+- **Server-Endpunkt `POST /api/ask`** (begründet: der Browser kann das Modell nicht selbst ausführen):
+  - Body: `{ messages: [{ role: 'user' | 'assistant', content: string }] }`, max. 9 Nachrichten, letzte ist `user`; User-Nachricht max. 500 Zeichen, Assistant-Nachricht max. 2000 Zeichen; strikte Validierung, unbekannte Felder abgelehnt.
+  - Der Server setzt den Systemprompt davor, begrenzt die Antwort (`max_tokens` ca. 384), setzt Kontextgröße und Temperatur fest und streamt den Text als `text/plain` (chunked) zurück. Kein WebSocket.
+  - **Gleichzeitigkeit:** höchstens 1 Anfrage läuft am Modell, höchstens 3 warten; sonst `503` mit „beschäftigt“. Timeout für die ganze Antwort 90 s. Bricht der Browser ab, bricht der Server die Upstream-Anfrage ab.
+  - **Rate-Limit** eigenes, strengeres Limit: z. B. 10 Fragen pro Minute pro Client und 60 pro Minute global.
+  - Fehler und Ausfälle des Modells ergeben generische Meldungen, nie Details aus dem Container.
+  - `GET /api/ask/status` liefert `{ online: boolean }` (gecacht), damit `ask` und `help` den Zustand zeigen können.
+- Ohne `llm`-Container läuft die Website vollständig weiter, nur `ask` meldet „nicht erreichbar“.
+
+### Modellwahl für die Ziel-Hardware
+
+Server: Intel i7-7700 (4 Kerne / 8 Threads), 11 GB RAM (davon ca. 6 GB frei), **NVIDIA GeForce GTX 1050 Ti mit 4 GB VRAM** (Pascal, Compute Capability 6.1).
+
+- **GPU-Variante (Standard):** Das Modell muss samt KV-Cache in 4 GB VRAM passen. Das reicht für ein Modell mit **etwa 3 bis 4 Milliarden Parametern in 4-Bit-Quantisierung** (Q4_K_M, ca. 2 bis 2,6 GB Datei) bei einem Kontext von 2048 bis 4096 Tokens. Erwartet sind grob 15 bis 30 Tokens pro Sekunde; der Spike misst das.
+- **CPU-Variante (Fallback):** Für den Fall, dass die GPU nicht nutzbar ist (Treiber, CUDA) oder für die Entwicklung auf dem Mac: ein Modell mit **1 bis 2 Milliarden Parametern** in Q4, ca. 1 bis 1,5 GB RAM, grob 5 bis 15 Tokens pro Sekunde auf dem i7-7700.
+- **Kandidaten** (Stand der Planung, der Spike prüft die aktuelle Lage):
+  - GPU: Qwen3 4B Instruct (Apache 2.0, gut mehrsprachig), Gemma 3 4B IT (gutes Deutsch, Gemma-Lizenz), Llama 3.2 3B Instruct (Llama-Community-Lizenz).
+  - CPU: Qwen3 1.7B, Gemma 3 1B.
+  - **Startempfehlung:** Qwen3 4B Instruct, Q4_K_M, auf der GPU; als CPU-Fallback Qwen3 1.7B. Endgültig entscheidet der Spike zusammen mit mir.
+- **Achtung Pascal:** Neuere CUDA-Versionen (ab 13) und neue NVIDIA-Treiberzweige unterstützen Pascal-Karten wie die 1050 Ti nicht mehr. Das llama.cpp-Image wird deshalb auf einen **CUDA-12-Build** festgelegt, und die CPU-Variante bleibt immer lauffähig.
+- **Spike (erstes Ticket des Meilensteins):** auf dem echten Server 2 bis 3 Kandidaten vergleichen. Kriterien: passt in VRAM bzw. RAM, Tokens pro Sekunde, Zeit bis zum ersten Token, Qualität auf Deutsch an 10 festen Testfragen, Lizenz. Dafür gibt es `make llm-bench`. Ergebnis in `docs/llm-spike.md`, Entscheidung durch mich.
+
+### Betrieb
+
+- Compose-Profil `llm`: `make llm` startet den KI-Container zusätzlich (GPU-Variante mit `deploy.resources.reservations.devices` für NVIDIA, CPU-Variante über `LLM_DEVICE=cpu`).
+- `make llm-model` lädt das gewählte Modell mit fest hinterlegter URL **und SHA-256-Prüfsumme** in das Modell-Volume. Das Modell liegt nicht im Image und nicht im Repo.
+- Limits für den Container: Speicher (z. B. 5 GB), CPU (z. B. 6 von 8 Threads), damit Website und Minecraft-Server flüssig bleiben. Healthcheck auf `/health`.
+- Konfiguration über `.env`: Modelldatei, Kontextgröße, Threads, GPU-Layer, Variante.
+
+### Tests
+
+- Vitest: `/api/ask` gegen einen **Fake-Upstream** (streamt feste Tokens): Validierung, Limits, Warteschlange, Timeout, Abbruch, Ausfall, keine Details im Fehlerfall.
+- Playwright: gegen einen kleinen **Stub-Container** (OpenAI-kompatibel, feste Antwort) statt des echten Modells, damit die CI kein Modell braucht. Geprüft: Streaming-Ausgabe, Ctrl+C, Offline-Meldung, Umbruch auf 360 px, keine Escape-Sequenzen aus der Antwort.
+- Das echte Modell wird nur im Spike und manuell auf dem Server getestet.
+
+---
+
 ## 5. Sicherheit und Härtung
 
 ### Was bleibt
@@ -215,6 +278,7 @@ Direkt über der Tastatur gibt es die Tasten, die mobil fehlen: `Tab`, `↑`, `�
 - Sicherheits-Header über `@fastify/helmet`, inklusive CSP (`script-src 'self'`; `connect-src` nur `'self'` und `https://api.github.com`).
 - Ein einfaches globales Rate-Limit für `/api/*` (der Snapshot ist gecached, Minecraft hat eigenen Cache).
 - Container-Härtung (Abschnitt 9).
+- **KI-Assistent:** `llm`-Container nur im internen Netz und ohne Internetzugang, keine Werkzeuge und keine Secrets im Modellkontext, fester Systemprompt auf dem Server, harte Limits (Eingabelänge, Antwort-Tokens, Zeit, Warteschlange, eigenes Rate-Limit), Antworten werden wie alle Ausgaben gefiltert. Prompt-Injection gegen das Modell ist möglich, kann aber nichts auslösen außer Text: Das Modell hat keinen Zugriff auf irgendetwas.
 
 ### Was gegenüber v3 entfällt (und warum)
 
@@ -253,7 +317,7 @@ Direkt über der Tastatur gibt es die Tasten, die mobil fehlen: `Tab`, `↑`, `�
 
 Jede Arbeit läuft über Tickets auf dem **GitHub-Projects-Kanban-Board** des Repos. Die vollständigen Regeln stehen in der `CLAUDE.md`. Für dich als Overseer-Agent bedeutet das:
 
-1. **Board und Labels** sind eingerichtet (`Backlog`, `Ready`, `In Progress`, `In Review`, `Done`; Labels `feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`, `epic`). Für v4 kommt der Meilenstein `mvp-7` dazu.
+1. **Board und Labels** sind eingerichtet (`Backlog`, `Ready`, `In Progress`, `In Review`, `Done`; Labels `feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`, `epic`). Für v4 kamen `mvp-7` (KI-Assistent) und `mvp-8` (Release) dazu.
 2. **Planung:** Zu jedem Meilenstein gibt es ein Epic-Ticket und Einzeltickets mit Akzeptanzkriterien. Der aktuelle Meilenstein steht auf `Ready`, die späteren bleiben im `Backlog`, bis sie dran sind.
 3. **Delegation:** Du gibst Subagents ihre Aufgaben nur über Tickets. Im Auftrag steht die Ticketnummer. Ein Subagent ohne Ticketnummer darf nicht arbeiten.
 4. **Spontane Änderungen:** Jeder Agent legt dafür **vorher selbst** ein Ticket mit dem Label `unplanned` an (siehe `CLAUDE.md`). Große oder meilensteinfremde Ideen landen nur im `Backlog`.
@@ -270,12 +334,12 @@ maxim-os-website/
 ├─ apps/
 │  ├─ web/            # Vite + xterm.js: Terminal, Shell, Command-Handler,
 │  │                  # virtuelles Dateisystem (vfs/), Persistenz, Snake, Animationen
-│  └─ server/         # Fastify: Snapshot-Generator, /api/fs, /api/health, später /api/minecraft
+│  └─ server/         # Fastify: Snapshot-Generator, /api/fs, /api/health, später /api/minecraft, /api/ask
 ├─ packages/
 │  └─ shared/         # Command-Registry, Parser, Snapshot-Typen
 ├─ content/           # Inhalte für den Snapshot (öffentlich, Read-only im Container)
 ├─ scripts/           # ASCII-Bild-Generator
-├─ docker/            # Dockerfiles
+├─ docker/            # Dockerfiles, llm/ (Modell-Download, Bench), llm-stub/ (Fake-Modell für Tests)
 ├─ docker-compose.yml        # dev und test
 ├─ docker-compose.prod.yml   # Production
 ├─ Makefile
@@ -290,9 +354,10 @@ maxim-os-website/
 
 - Production-Image (Multi-Stage), Nicht-Root-User, `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, Content-Ordner als Read-only-Volume.
 - `docker-compose.prod.yml` startet die Website auf **einem** klar dokumentierten Port, auf den ich den Tunnel zeigen lasse.
-- Konfiguration über Umgebungsvariablen mit einer `.env.example` (z. B. Minecraft-Host und -Port, Port der App, GitHub-Username). Es werden keine Secrets committed.
+- Konfiguration über Umgebungsvariablen mit einer `.env.example` (z. B. Minecraft-Host und -Port, Port der App, GitHub-Username, KI-Modell und -Variante). Es werden keine Secrets committed.
+- KI-Container: GPU-Variante braucht auf dem Server einen NVIDIA-Treiber mit Pascal-Unterstützung und das NVIDIA Container Toolkit (richte ich selbst ein, die README beschreibt es). Die CPU-Variante läuft ohne GPU. Der KI-Container bekommt **keinen** eigenen Port im Tunnel.
 - Healthcheck-Endpoint und Healthcheck im Compose-File.
-- Die `README.md` enthält: Voraussetzungen, Start und Stop, Update (neues Image ziehen/bauen), Inhalte aktualisieren (Content-Ordner ändern, Container neu starten), Logs, welcher Port freigegeben werden muss und welche Subdomains (`maxim-dieball.de`, `movies.`, `minecraft.`) ich im Tunnel einrichten muss.
+- Die `README.md` enthält: Voraussetzungen, Start und Stop, Update (neues Image ziehen/bauen), Inhalte aktualisieren (Content-Ordner ändern, Container neu starten), KI-Modell herunterladen und wechseln, GPU- vs. CPU-Variante, Logs, welcher Port freigegeben werden muss und welche Subdomains (`maxim-dieball.de`, `movies.`, `minecraft.`) ich im Tunnel einrichten muss.
 
 ---
 
@@ -313,6 +378,8 @@ maxim-os-website/
 - [ ] `watchthis` zeigt den Ladebalken und öffnet danach `movies.maxim-dieball.de` (mit Fallback-Link).
 - [ ] `minecraft` zeigt Status, Spieler und Ping, auch sauber im Offline-Fall.
 - [ ] `steckbrief` zeigt GitHub-Daten (mit Fallback) und das vorgerenderte ASCII-Bild.
+- [ ] `ask` beantwortet Fragen über den `llm`-Container mit gestreamter Antwort, Ctrl+C bricht ab, ohne Container kommt eine freundliche Meldung. Das Modell läuft auf der Ziel-Hardware (GPU-Variante, CPU-Fallback), der Spike ist dokumentiert.
+- [ ] Der `llm`-Container ist nicht von außen erreichbar, hat keinen Internetzugang und harte Limits; das Review des KI-Endpunkts hat keine offenen Funde.
 - [ ] CI ist grün: Lint, Typecheck, Vitest, Playwright-Regression, Build.
 - [ ] Das Kanban-Board existiert, jede Änderung ist einem Ticket zugeordnet, jeder Commit und PR nennt eine Ticketnummer.
 - [ ] Spontane Änderungen haben ein eigenes `unplanned`-Ticket, das vor der Arbeit angelegt wurde.

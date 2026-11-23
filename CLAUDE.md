@@ -13,7 +13,8 @@ Persönliche Website, die ein Terminal simuliert ("MAXIM OS", "an ai coding proj
 - Der Server liefert das gebaute Frontend aus und stellt den Inhalt des Content-Ordners **einmal als Snapshot** bereit (Ordnerstruktur und Textdateien als JSON). Er nimmt **keine Pfade und keine Commands** vom User entgegen.
 - Der Browser lädt den Snapshot und baut daraus ein **virtuelles Dateisystem im Speicher**. Alle Commands (`ls`, `cd`, `cat`, `tree`, aber auch bearbeitende wie `mkdir`, `touch`, `rm`, `mv`, `cp`, `echo > datei`) arbeiten nur auf dieser Kopie.
 - Änderungen des Users bleiben in seinem Browser (Speicher bzw. `localStorage`). Sie gehen **nie** zurück an den Server. `reset` stellt den Originalzustand wieder her.
-- Weitere Server-Endpunkte gibt es nur, wenn der Browser etwas technisch nicht selbst kann (z. B. Minecraft-Server-Status). Jeder neue Endpunkt wird in `docs/SPEC.md` begründet.
+- Weitere Server-Endpunkte gibt es nur, wenn der Browser etwas technisch nicht selbst kann (z. B. Minecraft-Server-Status, KI-Antworten). Jeder neue Endpunkt wird in `docs/SPEC.md` begründet.
+- **KI-Assistent:** Ein zweiter Container (`llm`) hostet ein kleines Sprachmodell (llama.cpp-Server). Er ist nur im internen Docker-Netz erreichbar, nie direkt aus dem Internet. Der Browser fragt über den Fastify-Server an (`POST /api/ask`), der Server leitet weiter und streamt die Antwort zurück. Gestartet wird das im Terminal mit dem Command `ask`. Fällt der Container aus, läuft die Website normal weiter.
 - **Alles im Content-Ordner ist öffentlich**, denn der komplette Snapshot wird an jeden Besucher ausgeliefert. Dort liegen nie private Daten, Secrets oder Konfiguration.
 
 ## Techstack
@@ -22,6 +23,7 @@ Persönliche Website, die ein Terminal simuliert ("MAXIM OS", "an ai coding proj
 - Frontend: Vite + TypeScript + xterm.js, kein UI-Framework. Das virtuelle Dateisystem und alle Commands liegen in `apps/web`.
 - Backend: Node.js (LTS) + Fastify. Routen: Snapshot (`GET /api/fs`), Health (`GET /api/health`), später Minecraft-Status. Fastify liefert auch das gebaute Frontend aus. Kein WebSocket.
 - Minecraft-Status: `minecraft-server-util`.
+- KI: llama.cpp-Server (OpenAI-kompatible API) mit einem kleinen GGUF-Modell, das auf der Ziel-Hardware läuft (GTX 1050 Ti, 4 GB VRAM; CPU-Fallback). Modellwahl siehe `docs/SPEC.md` Abschnitt 4b.
 - Tests: Vitest (Unit/API), Playwright (UI).
 - CI: GitHub Actions.
 
@@ -49,14 +51,15 @@ Die Website muss zu einem großen Teil **hochkant auf dem Handy** funktionieren.
 Durch die Client-first-Architektur ist der Server nur noch ein kleines Angriffsziel. Diese Regeln bleiben trotzdem verbindlich:
 
 1. **Niemals Prozesse starten.** Kein `child_process`, `exec`, `spawn`, keine Shell, nirgends im Server (Lint-Regel und Test erzwingen das).
-2. **Der Server nimmt keine Pfade, Dateinamen oder Commands vom User entgegen.** Er liest nur den Content-Ordner, den er selbst konfiguriert bekommt.
+2. **Der Server nimmt keine Pfade, Dateinamen oder Commands vom User entgegen.** Er liest nur den Content-Ordner, den er selbst konfiguriert bekommt. Einzige Ausnahme sind Freitext-Fragen an den KI-Assistenten (`POST /api/ask`): streng validiert und begrenzt, sie werden nur an das Modell weitergegeben und nie als Pfad, Command oder Code ausgewertet.
 3. **Snapshot-Generator:** liest nur Ordner und reguläre Dateien **innerhalb** des Content-Ordners und **folgt keinen Symlinks**. Er hat feste Limits (Dateigröße, Gesamtgröße, Anzahl Einträge, Tiefe). Binärdateien werden nicht als Text ausgeliefert. Der Snapshot enthält nur relative Namen, nie echte Hostpfade.
 4. **Der Server leakt nie Hostpfade oder Stacktraces.** Fehler gehen ins Log, der Client bekommt nur generische Meldungen.
 5. **Keine Terminal-Injection:** Alles, was ins Terminal geschrieben wird (Dateinamen, Dateiinhalte, Eingaben in Fehlermeldungen), wird vorher von Steuer- und Escape-Zeichen befreit. Inhalte werden nie als HTML in die Seite eingefügt (kein `innerHTML` mit Inhalten).
 6. **Schreibende Commands ändern nur die lokale Kopie** im Browser des Users. Es gibt keinen Endpunkt, der Änderungen annimmt.
 7. **Allowlist für Commands und Flags:** Unbekannte Commands, Flags und Parameter werden mit klarer Meldung abgelehnt. (Das ist jetzt vor allem UX und Robustheit, keine Sicherheitsgrenze mehr.)
-8. Custom Commands (`snake`, `watchthis`, `minecraft`, `help`, ...) sind reine Client-Funktionen und existieren nicht als Dateien.
-9. Container: Nicht-Root, `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, Content-Ordner als Read-only-Volume. Sicherheits-Header (CSP usw.) und ein einfaches Rate-Limit für die API bleiben.
+8. Custom Commands (`snake`, `watchthis`, `minecraft`, `ask`, `help`, ...) sind reine Client-Funktionen und existieren nicht als Dateien.
+9. **KI-Container:** nur im internen Docker-Netz (kein veröffentlichter Port, kein Internetzugang), keine Werkzeuge, keine Secrets, kein Zugriff auf Dateien außer dem Modell (read-only). Der Systemprompt liegt fest auf dem Server und kann vom User nicht ersetzt werden. Eingaben und Antworten haben harte Limits (Länge, Tokens, Zeit, gleichzeitige Anfragen, Rate-Limit). Antworten des Modells sind unvertrauenswürdig und werden wie alle Ausgaben gefiltert (Regel 5).
+10. Container (Website und KI): Nicht-Root, `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, Content-Ordner und Modell als Read-only-Volumes, Speicher- und CPU-Limits für den KI-Container. Sicherheits-Header (CSP usw.) und ein einfaches Rate-Limit für die API bleiben.
 
 ## Entwicklungsregeln
 
@@ -77,7 +80,7 @@ Durch die Client-first-Architektur ist der Server nur noch ein kleines Angriffsz
   - Der **Overseer-Agent** (Haupt-Agent) legt die Tickets für geplante Arbeit an und gibt sie beim Delegieren an Subagents. Jeder Subagent bekommt in seinem Auftrag die Ticketnummer(n), an denen er arbeitet.
   - Jeder Agent, der **spontan** etwas ändern will, das zu keinem Ticket passt (Bug entdeckt, Refactoring, fehlender Test, neue Idee), **erstellt vorher selbst ein Ticket** mit dem Label `unplanned`, verlinkt das Eltern-Ticket und setzt es auf `In Progress`. Danach erst arbeitet er daran.
   - Ist die spontane Änderung groß oder gehört sie nicht zum aktuellen Meilenstein, wird nur das Ticket im `Backlog` angelegt und **nicht** umgesetzt. Der Overseer entscheidet.
-- **Ticket-Inhalt:** Titel (kurz, imperativ), Beschreibung (Ziel und Kontext), Akzeptanzkriterien als Checkliste, Meilenstein (`mvp-1` bis `mvp-7`), Label (`feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`). Jeder Meilenstein hat ein Epic-Ticket, dessen Checkliste auf die Einzeltickets verweist.
+- **Ticket-Inhalt:** Titel (kurz, imperativ), Beschreibung (Ziel und Kontext), Akzeptanzkriterien als Checkliste, Meilenstein (`mvp-1` bis `mvp-8`), Label (`feature`, `bug`, `test`, `security`, `docs`, `chore`, `unplanned`). Jeder Meilenstein hat ein Epic-Ticket, dessen Checkliste auf die Einzeltickets verweist.
 - **Status pflegen:** Wer ein Ticket beginnt, setzt es auf `In Progress`, nach dem Push auf `In Review`, nach grüner Pipeline und Merge auf `Done`. Der Status stimmt immer mit der Realität überein.
 - **Verknüpfung:** Branch-Namen `<typ>/<issue-nr>-<kurzname>` (z. B. `feature/12-snake`). Jeder Commit enthält `#<issue-nr>`. Jeder Pull Request enthält `Closes #<issue-nr>`. Ein Commit oder PR ohne Ticketbezug ist nicht erlaubt.
 - **Durchsetzung:** Ein `commit-msg`-Hook und ein CI-Check prüfen, dass Commits und PRs eine Ticketnummer enthalten.
@@ -86,3 +89,4 @@ Durch die Client-first-Architektur ist der Server nur noch ein kleines Angriffsz
 ## Zuständigkeiten
 
 - Der Heimserver und die playit.gg-Tunnel werden **vom Besitzer selbst** eingerichtet. Der Agent baut keine Tunnel-Container und keine Server-Konfiguration, nur ein lauffähiges, dokumentiertes Docker-Setup.
+- Auch NVIDIA-Treiber und NVIDIA Container Toolkit auf dem Server richtet der Besitzer ein. Der Agent dokumentiert, was nötig ist, und liefert eine CPU-Variante, die ohne GPU läuft.
