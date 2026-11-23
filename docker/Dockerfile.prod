@@ -9,7 +9,8 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
 COPY apps/server/package.json apps/server/
 COPY e2e/package.json e2e/
-RUN pnpm install --frozen-lockfile --filter '!@maxim-os/e2e'
+COPY scripts/package.json scripts/
+RUN pnpm install --frozen-lockfile --filter '!@maxim-os/e2e' --filter '!@maxim-os/scripts'
 COPY packages ./packages
 COPY apps ./apps
 RUN pnpm build \

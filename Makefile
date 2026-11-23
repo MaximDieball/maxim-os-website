@@ -4,7 +4,7 @@ TOOLS  = $(DC) --profile tools run --rm tools
 PW     = $(DC) --profile test run --rm --build playwright
 
 .PHONY: help dev down install lint format typecheck test build test-ui test-ui-screenshots \
-        update-baselines ci hooks clean
+        update-baselines ci hooks clean portrait
 
 help: ## Zeigt alle Targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-22s %s\n", $$1, $$2}'
@@ -43,6 +43,9 @@ update-baselines: ## Erzeugt Regressions-Baselines neu (nur im Container)
 	$(PW) test tests/regression --update-snapshots
 
 ci: lint typecheck test build test-ui ## Komplette Pipeline-Checkliste lokal
+
+portrait: ## Erzeugt das ASCII-Porträt aus assets/headshot/image.png nach content/about/
+	$(TOOLS) pnpm --filter @maxim-os/scripts portrait
 
 hooks: ## Aktiviert die Git-Hooks (commit-msg, pre-push)
 	git config core.hooksPath .githooks
