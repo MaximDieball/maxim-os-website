@@ -10,15 +10,27 @@ import {
 import { VfsError } from '../vfs/vfs.ts';
 import type { GithubData } from '../profile/github.ts';
 import type { Workspace } from '../vfs/workspace.ts';
-import { CLIENT_HANDLERS } from './commands.ts';
+import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
 import { clean } from './format.ts';
 import { History } from './history.ts';
 import { sanitizeInput, stripAnsi, style, truncate } from './text.ts';
 
 /** Ausgabekanal, den das Terminal (xterm.js) bereitstellt. */
+/**
+ * Klickbare Zeile (#90): Ein Klick bzw. Tippen führt `command` aus, als wäre es
+ * getippt worden. `from` ist die erste klickbare Spalte (z. B. neben dem Porträt).
+ */
+export interface LineAction {
+  command: string;
+  from?: number;
+}
+
 export interface ShellOutput {
-  /** Gibt Zeilen aus. ANSI-Farben sind erlaubt. */
-  print(lines: string[]): void;
+  /**
+   * Gibt Zeilen aus. ANSI-Farben sind erlaubt. `actions[i]` macht Zeile i klickbar
+   * (nur im Terminal; bei Umleitung in eine Datei entfällt es).
+   */
+  print(lines: string[], actions?: readonly (LineAction | undefined)[]): void;
   clear(): void;
   /** Aktuelle Breite in Zeichen. */
   cols(): number;
@@ -42,6 +54,8 @@ export interface CommandContext {
 export interface ShellServices {
   /** Öffentliche GitHub-Daten; undefined, wenn nicht erreichbar. */
   github?: () => Promise<GithubData | undefined>;
+  /** README eines eigenen Repos als Markdown (#89). */
+  readme?: (repo: string) => Promise<string | undefined>;
 }
 
 export type ClientHandler = (ctx: CommandContext) => void | Promise<void>;
@@ -219,8 +233,16 @@ export class Shell {
     const spec = findCommand(input.trimStart().split(/\s+/)[0] ?? '');
     await this.ready;
     const ws = this.ws;
-    if (!spec?.pathOperands || !ws) return input;
     const partial = /\s$/.test(input) ? '' : (input.split(/\s+/).at(-1) ?? '');
+    const named = spec && Object.hasOwn(OPERAND_COMPLETIONS, spec.name);
+    if (named && !partial.startsWith('-')) {
+      const names = (await OPERAND_COMPLETIONS[spec.name]!({ services: this.services, ws }))
+        .filter((n) => n.toLowerCase().startsWith(partial.toLowerCase()))
+        .sort();
+      const head = input.slice(0, input.length - partial.length);
+      return this.pick(input, head, names, (n) => n, ' ');
+    }
+    if (!spec?.pathOperands || !ws) return input;
     if (/["'>]/.test(partial) || partial.startsWith('-')) return input;
 
     const slash = partial.lastIndexOf('/');

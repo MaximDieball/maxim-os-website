@@ -1,4 +1,5 @@
-import type { Terminal } from '@xterm/xterm';
+import type { IMarker, Terminal } from '@xterm/xterm';
+import type { LineAction } from '../shell/shell.ts';
 
 /**
  * Klickbare Links in der Terminal-Ausgabe (#31). Eigene Umsetzung statt des
@@ -22,7 +23,11 @@ export function urlAt(line: string, col: number): string | undefined {
 }
 
 /** Logische Zeile (über Umbrüche hinweg) und Spalte für eine Pufferposition. */
-function logicalLine(term: Terminal, row: number, col: number): { text: string; col: number } {
+function logicalLine(
+  term: Terminal,
+  row: number,
+  col: number,
+): { text: string; col: number; start: number } {
   const buffer = term.buffer.active;
   let start = row;
   while (start > 0 && buffer.getLine(start)?.isWrapped) start--;
@@ -35,10 +40,45 @@ function logicalLine(term: Terminal, row: number, col: number): { text: string; 
     if (r === row) offset = text.length + col;
     text += part;
   }
-  return { text, col: offset };
+  return { text, col: offset, start };
 }
 
-export function bindLinks(term: Terminal, screen: HTMLElement, open: (url: string) => void): void {
+/**
+ * Klickbare Zeilen (#90). Jede Zeile hängt an einem xterm-Marker, der beim Scrollen
+ * und Umbrechen mitwandert und verschwindet, wenn die Zeile aus dem Puffer fällt.
+ */
+export class LineActions {
+  private entries: { marker: IMarker; action: LineAction }[] = [];
+
+  add(marker: IMarker | undefined, action: LineAction): void {
+    if (!marker) return;
+    this.entries.push({ marker, action });
+    marker.onDispose(() => {
+      this.entries = this.entries.filter((e) => e.marker !== marker);
+    });
+  }
+
+  /** Command für die logische Zeile, die in Pufferzeile `start` beginnt. */
+  at(start: number, col: number): string | undefined {
+    const hit = this.entries.find((e) => !e.marker.isDisposed && e.marker.line === start);
+    return hit && col >= (hit.action.from ?? 0) ? hit.action.command : undefined;
+  }
+
+  clear(): void {
+    for (const e of [...this.entries]) e.marker.dispose();
+    this.entries = [];
+  }
+}
+
+export interface LinkHandlers {
+  /** Öffnet einen http(s)-Link. */
+  open(url: string): void;
+  actions?: LineActions;
+  /** Führt das Command einer klickbaren Zeile aus. */
+  run?(command: string): void;
+}
+
+export function bindLinks(term: Terminal, screen: HTMLElement, handlers: LinkHandlers): void {
   const cellAt = (e: MouseEvent): { row: number; col: number } | undefined => {
     const rect = screen.getBoundingClientRect();
     if (!term.cols || !term.rows || rect.width === 0) return undefined;
@@ -47,19 +87,27 @@ export function bindLinks(term: Terminal, screen: HTMLElement, open: (url: strin
     if (col < 0 || row < 0 || col >= term.cols || row >= term.rows) return undefined;
     return { row: term.buffer.active.viewportY + row, col };
   };
-  const linkAt = (e: MouseEvent): string | undefined => {
+  type Target = { url: string } | { command: string };
+  const targetAt = (e: MouseEvent): Target | undefined => {
     const cell = cellAt(e);
     if (!cell) return undefined;
-    const { text, col } = logicalLine(term, cell.row, cell.col);
-    return urlAt(text, col);
+    const { text, col, start } = logicalLine(term, cell.row, cell.col);
+    const url = urlAt(text, col);
+    if (url) return { url };
+    // Nur auf Text klicken, nicht ins Leere rechts daneben
+    if (col >= text.trimEnd().length) return undefined;
+    const command = handlers.run ? handlers.actions?.at(start, col) : undefined;
+    return command ? { command } : undefined;
   };
 
   screen.addEventListener('click', (e) => {
     if (term.hasSelection()) return;
-    const url = linkAt(e);
-    if (url) open(url);
+    const target = targetAt(e);
+    if (!target) return;
+    if ('url' in target) handlers.open(target.url);
+    else handlers.run?.(target.command);
   });
   screen.addEventListener('mousemove', (e) => {
-    screen.style.cursor = linkAt(e) ? 'pointer' : '';
+    screen.style.cursor = targetAt(e) ? 'pointer' : '';
   });
 }

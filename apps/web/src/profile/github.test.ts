@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CACHE_KEY, loadGithub, parseProfileData, type GithubData } from './github.ts';
+import {
+  CACHE_KEY,
+  loadGithub,
+  loadReadme,
+  parseFacts,
+  parseProfileData,
+  type GithubData,
+} from './github.ts';
 import type { KeyValueStore } from '../vfs/workspace.ts';
 
 const PROFILE = {
@@ -167,5 +174,60 @@ describe('parseProfileData', () => {
   it('rejects garbage', () => {
     expect(parseProfileData(null)).toBeUndefined();
     expect(parseProfileData({ profile: {} })).toBeUndefined();
+  });
+});
+
+describe('repo details and facts', () => {
+  it('keeps the last update date of a repo', async () => {
+    const repos = [{ ...REPOS[0], pushed_at: '2026-11-20T10:00:00Z' }];
+    const data = await loadGithub({
+      user: 'MaximDieball',
+      fetch: fakeFetch({ ...ok, '/users/MaximDieball/repos': { status: 200, body: repos } }),
+      storage: memoryStore(),
+    });
+    expect(data?.repos[0]?.updatedAt).toBe('2026-11-20T10:00:00Z');
+  });
+
+  it('reads own facts from the fallback file', () => {
+    expect(
+      parseFacts({
+        facts: [
+          { label: 'Studium', value: 'Angewandte Informatik (dual), Nordakademie' },
+          { label: 'x' },
+          'nope',
+        ],
+      }),
+    ).toEqual([{ label: 'Studium', value: 'Angewandte Informatik (dual), Nordakademie' }]);
+    expect(parseFacts(null)).toEqual([]);
+  });
+});
+
+describe('loadReadme', () => {
+  it('loads the raw README of a repo and caches it', async () => {
+    const calls: string[] = [];
+    const store = memoryStore();
+    const fetchReadme = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return new Response('# Hallo\n', { status: 200 });
+    }) as typeof fetch;
+    const opts = { user: 'MaximDieball', fetch: fetchReadme, storage: store };
+    expect(await loadReadme('ChessBot', opts)).toBe('# Hallo\n');
+    expect(await loadReadme('ChessBot', opts)).toBe('# Hallo\n');
+    expect(calls).toEqual(['https://api.github.com/repos/MaximDieball/ChessBot/readme']);
+  });
+
+  it('returns undefined without README, on errors and for odd names', async () => {
+    const missing = fakeFetch({});
+    expect(await loadReadme('x', { fetch: missing, storage: memoryStore() })).toBeUndefined();
+    expect(
+      await loadReadme('../../evil', { fetch: missing, storage: memoryStore() }),
+    ).toBeUndefined();
+  });
+
+  it('cuts very large READMEs', async () => {
+    const big = (async () => new Response('a'.repeat(200_000), { status: 200 })) as typeof fetch;
+    expect(
+      (await loadReadme('x', { fetch: big, storage: memoryStore() }))!.length,
+    ).toBeLessThanOrEqual(64 * 1024);
   });
 });
