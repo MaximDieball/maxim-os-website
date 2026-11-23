@@ -21,6 +21,14 @@ const REPOS = [
     fork: false,
     html_url: 'https://github.com/MaximDieball/maxim-os-website',
   },
+  {
+    name: 'Paper-Memes',
+    description: 'An overlay to paper trade pumpfun meme coins on photon',
+    language: 'JavaScript',
+    stargazers_count: 0,
+    fork: false,
+    html_url: 'https://github.com/MaximDieball/Paper-Memes',
+  },
 ];
 
 const README = '# MAXIM OS\n\nEin **Terminal** im Browser.\n\n- Steckbrief\n- Projekte\n';
@@ -107,6 +115,15 @@ test.describe('profile commands', () => {
     await run(page, 'steckbrief');
     await clickText(page, 'maxim-os-website');
     await expect(page.locator('#live')).toContainText('Ein Terminal im Browser.');
+  });
+
+  test('project page shows the download page from the content folder (#95)', async ({ page }) => {
+    await mockGithub(page);
+    await openTerminal(page);
+    await run(page, 'project paper-memes');
+    const live = page.locator('#live');
+    await expect(live).toContainText('Chrome Web Store');
+    await expect(live).toContainText('https://chromewebstore.google.com/detail/paper-memes');
   });
 
   test('about, whoami and history', async ({ page }) => {

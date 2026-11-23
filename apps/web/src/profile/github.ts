@@ -38,6 +38,15 @@ export interface GithubRepo {
   homepage?: string;
   /** Letzter Push (ISO-Datum). */
   updatedAt?: string;
+  /** Produkt-, Download- und weitere Seiten aus dem Content-Ordner (#95). */
+  links?: ProjectLink[];
+}
+
+/** Zusätzliche Seite eines Projekts, z. B. Chrome Web Store (#95). */
+export interface ProjectLink {
+  kind: 'download' | 'product' | 'link';
+  label: string;
+  url: string;
 }
 
 /** Eigene Angaben aus dem Content-Ordner, z. B. Studium (#91). */
@@ -116,6 +125,32 @@ function repoFrom(raw: unknown, api: boolean): GithubRepo | undefined {
 function date(v: unknown): string | undefined {
   const t = text(v);
   return t && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(t) ? t : undefined;
+}
+
+const KINDS = new Set<ProjectLink['kind']>(['download', 'product', 'link']);
+const MAX_LINKS = 5;
+
+/**
+ * Zusätzliche Links pro Projekt aus steckbrief.json (`projectLinks`), Schlüssel ist der
+ * Repo-Name in Kleinbuchstaben. Nur http(s), höchstens MAX_LINKS je Projekt.
+ */
+export function parseProjectLinks(raw: unknown): Map<string, ProjectLink[]> {
+  const out = new Map<string, ProjectLink[]>();
+  if (!isObj(raw) || !isObj(raw.projectLinks)) return out;
+  for (const [name, list] of Object.entries(raw.projectLinks)) {
+    if (!Array.isArray(list)) continue;
+    const links = list.flatMap((l): ProjectLink[] => {
+      if (!isObj(l)) return [];
+      const label = text(l.label);
+      const url = link(l.url);
+      const kind = KINDS.has(l.kind as ProjectLink['kind'])
+        ? (l.kind as ProjectLink['kind'])
+        : 'link';
+      return label && url && /^https?:/.test(url) ? [{ kind, label: label.slice(0, 40), url }] : [];
+    });
+    if (links.length) out.set(name.toLowerCase(), links.slice(0, MAX_LINKS));
+  }
+  return out;
 }
 
 /** Fakten aus steckbrief.json: nur Einträge mit Label und Wert. */

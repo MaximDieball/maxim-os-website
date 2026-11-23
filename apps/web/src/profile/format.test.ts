@@ -192,6 +192,9 @@ describe('formatProject', () => {
 
   it('explains a missing README', () => {
     expect(plain(formatProject(repo, undefined, 80)).join('\n')).toContain('Keine README');
+    expect(plain(formatProject(repo, undefined, 80, true)).join('\n')).toContain(
+      'GitHub nicht erreichbar',
+    );
   });
 
   it('stays within narrow screens except for links', () => {
@@ -200,5 +203,30 @@ describe('formatProject', () => {
     )) {
       expect(l.length).toBeLessThanOrEqual(40);
     }
+  });
+});
+
+describe('product and download pages (#95)', () => {
+  const repo = {
+    ...DATA.repos[0]!,
+    links: [
+      {
+        kind: 'download' as const,
+        label: 'Chrome Web Store',
+        url: 'https://chromewebstore.google.com/detail/x',
+      },
+    ],
+  };
+
+  it('shows them on the project page with a clickable link', () => {
+    const text = plain(formatProject(repo, undefined, 80)).join('\n');
+    expect(text).toMatch(/Download +Chrome Web Store/);
+    expect(text).toContain('https://chromewebstore.google.com/detail/x');
+  });
+
+  it('mentions them in the project list', () => {
+    const text = plain(formatProjects([repo], 80)).join('\n');
+    expect(text).toContain('Download: Chrome Web Store');
+    expect(text).not.toContain('https://');
   });
 });

@@ -4,6 +4,7 @@ import {
   loadGithub,
   loadReadme,
   parseFacts,
+  parseProjectLinks,
   parseProfileData,
   type GithubData,
 } from './github.ts';
@@ -229,5 +230,31 @@ describe('loadReadme', () => {
     expect(
       (await loadReadme('x', { fetch: big, storage: memoryStore() }))!.length,
     ).toBeLessThanOrEqual(64 * 1024);
+  });
+});
+
+describe('parseProjectLinks (#95)', () => {
+  it('reads product and download pages per project, keyed case-insensitively', () => {
+    const links = parseProjectLinks({
+      projectLinks: {
+        'Paper-Memes': [
+          {
+            kind: 'download',
+            label: 'Chrome Web Store',
+            url: 'https://chromewebstore.google.com/x',
+          },
+          { kind: 'weird', label: 'Demo', url: 'https://demo.example' },
+          { label: 'Böse', url: 'javascript:alert(1)' },
+          { label: 'ohne URL' },
+        ],
+        Other: 'nope',
+      },
+    });
+    expect(links.get('paper-memes')).toEqual([
+      { kind: 'download', label: 'Chrome Web Store', url: 'https://chromewebstore.google.com/x' },
+      { kind: 'link', label: 'Demo', url: 'https://demo.example/' },
+    ]);
+    expect(links.has('other')).toBe(false);
+    expect(parseProjectLinks(null).size).toBe(0);
   });
 });

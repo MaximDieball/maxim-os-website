@@ -1,7 +1,7 @@
 import { clean } from '../shell/format.ts';
 import type { LineAction, Output } from '../shell/shell.ts';
 import { style, wrap } from '../shell/text.ts';
-import type { GithubData, GithubRepo } from './github.ts';
+import type { GithubData, GithubRepo, ProjectLink } from './github.ts';
 import { renderMarkdown } from './markdown.ts';
 import { highlightSuggestions, suggestionsIn } from '../shell/suggest.ts';
 
@@ -150,6 +150,11 @@ export function formatProjects(repos: readonly GithubRepo[], cols: number): Outp
     if (repo.description) {
       for (const l of wrap(clean(repo.description), Math.max(10, cols - 3))) push(`  ${l}`, action);
     }
+    const hint = linkHint(repo);
+    if (hint) {
+      for (const l of wrap(hint, Math.max(10, cols - 5)))
+        push(`  ${style.yellow('↓')} ${l}`, action);
+    }
   });
   push('');
   for (const l of wrap(
@@ -167,8 +172,26 @@ const germanDate = (iso: string): string => {
   return `${d}.${m}.${y}`;
 };
 
+const KIND_LABEL: Record<ProjectLink['kind'], string> = {
+  download: 'Download',
+  product: 'Produkt',
+  link: 'Link',
+};
+
+/** Kurzer Hinweis auf Produkt- und Download-Seiten in `projects` (#95). */
+const linkHint = (repo: GithubRepo): string | undefined => {
+  const links = repo.links ?? [];
+  if (!links.length) return undefined;
+  return links.map((l) => `${KIND_LABEL[l.kind]}: ${clean(l.label)}`).join(' · ');
+};
+
 /** `project <name>`: Infos, Links und README eines Projekts (#89). */
-export function formatProject(repo: GithubRepo, readme: string | undefined, cols: number): Output {
+export function formatProject(
+  repo: GithubRepo,
+  readme: string | undefined,
+  cols: number,
+  offline = false,
+): Output {
   const width = Math.max(20, cols - 1);
   const lines: string[] = [style.bold(style.cyan(clean(repo.name)))];
   if (repo.description) lines.push(...wrap(clean(repo.description), width));
@@ -189,8 +212,17 @@ export function formatProject(repo: GithubRepo, readme: string | undefined, cols
   if (repo.homepage && shortUrl(repo.homepage) !== shortUrl(repo.url)) {
     fact('Web', repo.homepage, true);
   }
+  // Produkt- und Download-Seiten (#95): Art, Name, darunter der klickbare Link
+  for (const l of repo.links ?? []) {
+    if (repo.homepage && shortUrl(l.url) === shortUrl(repo.homepage)) continue;
+    fact(KIND_LABEL[l.kind], l.label);
+    lines.push(`${' '.repeat(LABEL)}${style.link(clean(l.url))}`);
+  }
   lines.push('', style.dim(`── README ${'─'.repeat(Math.max(0, Math.min(width, 48) - 10))}`), '');
-  lines.push(...(readme ? renderMarkdown(readme, cols) : [style.dim('Keine README gefunden.')]));
+  const missing = offline
+    ? 'README nicht verfügbar (GitHub nicht erreichbar).'
+    : 'Keine README gefunden.';
+  lines.push(...(readme ? renderMarkdown(readme, cols) : [style.dim(missing)]));
   lines.push('');
   const actions: (LineAction | undefined)[] = [];
   actions[lines.length] = { command: 'projects' };
