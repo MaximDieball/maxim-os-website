@@ -5,6 +5,7 @@ import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
 import { withSuggestions } from './shell/suggest.ts';
 import { createGameScreen } from './terminal/game-screen.ts';
+import type { LineEditor } from './terminal/editor.ts';
 import { loadMinecraft } from './minecraft/status.ts';
 import { askStream } from './ask/client.ts';
 import { createSuggestions } from './terminal/suggestions.ts';
@@ -54,6 +55,8 @@ async function boot(): Promise<void> {
   ]);
 
   const view = createTerminal(termEl, createLiveRegion(byId('live')), theme);
+  // Für Dienste, die den Editor brauchen, bevor er fertig ist (prefill)
+  const editorRef: { current?: LineEditor } = {};
   const editor = createNativeInput(
     form,
     input,
@@ -65,12 +68,15 @@ async function boot(): Promise<void> {
         openUrl: (url) => void window.open(url, '_blank', 'noopener,noreferrer'),
         minecraft: (signal) => loadMinecraft({ signal }),
         ask: (messages, onText, signal) => askStream(messages, onText, { signal }),
+        // Vorschläge des Assistenten in die Eingabe (#108); der Editor entsteht erst danach
+        prefill: (command) => editorRef.current?.prefill(command) ?? false,
         gameScreen: () =>
           createGameScreen(view.term, termEl.querySelector<HTMLElement>('.xterm-screen'), form),
         isMobile,
         storage: browserStorage(),
       }),
   );
+  editorRef.current = editor;
   // Klickbare Zeilen (z. B. Projekte) führen ihr Command aus, als wäre es getippt.
   view.onAction((command) => editor.run(command));
   // Vorschläge auf dem Startscreen (#99): weg nach dem ersten Command; ausgeblendet,

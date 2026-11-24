@@ -42,4 +42,15 @@ describe('askStream', () => {
       error: MSG_OFFLINE,
     });
   });
+
+  it('separates a suggested command from the text (#108)', async () => {
+    const fetchFn = (async () =>
+      new Response(streamOf(['Probier ', 'ls.\n\u001e{"comm', 'and":"ls"}']), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    const parts: string[] = [];
+    const r = await askStream([], (t) => parts.push(t), { fetch: fetchFn });
+    expect(r).toEqual({ ok: true, text: 'Probier ls.\n', command: 'ls' });
+    expect(parts.join('')).toBe('Probier ls.\n');
+  });
 });

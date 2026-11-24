@@ -318,6 +318,86 @@ describe('ask (#74)', () => {
   });
 });
 
+describe('assistant suggests commands (#108, #109)', () => {
+  function assistant(
+    result: { ok: true; text: string; command?: string } | { ok: false; error: string },
+    filled = '',
+  ) {
+    const { out, lines } = fakeOutput(80);
+    out.replaceLast = (l) => {
+      lines[lines.length - 1] = stripAnsi(l);
+    };
+    const sent: AskMessage[][] = [];
+    const prefilled: string[] = [];
+    const sh = new Shell(out, undefined, {
+      ask: async (messages, onText) => {
+        sent.push(messages);
+        if (result.ok) onText(result.text);
+        return result;
+      },
+      prefill: (c) => {
+        if (filled) return false;
+        prefilled.push(c);
+        return true;
+      },
+    });
+    return { sh, lines, sent, prefilled };
+  }
+
+  it('puts the suggested command into the input and says so', async () => {
+    const { sh, lines, prefilled } = assistant({
+      ok: true,
+      text: 'Mit minecraft siehst du den Status.',
+      command: 'minecraft',
+    });
+    await sh.execute('ask Wie bekomme ich Infos über den Minecraft-Server?');
+    expect(prefilled).toEqual(['minecraft']);
+    expect(lines.at(-1)).toBe('↳ Unten eingefügt: minecraft · Enter zum Ausführen');
+  });
+
+  it('still fills in the command when the model only sends the CMD line', async () => {
+    const { sh, lines, prefilled } = assistant({ ok: true, text: '', command: 'snake' });
+    await sh.execute('ask Wie kann ich Snake spielen?');
+    expect(prefilled).toEqual(['snake']);
+    expect(lines.join('\n')).toContain('Dafür gibt es den Command snake.');
+  });
+
+  it('ignores suggestions that are not commands and never overwrites typed input', async () => {
+    const bad = assistant({ ok: true, text: 'x', command: 'sudo rm -rf /' });
+    await bad.sh.execute('ask x');
+    expect(bad.prefilled).toEqual([]);
+    const typed = assistant({ ok: true, text: 'x', command: 'ls' }, 'schon getippt');
+    await typed.sh.execute('ask x');
+    expect(typed.lines.join('\n')).not.toContain('Unten eingefügt');
+  });
+
+  it('sends unknown commands to the assistant with context, outside the history', async () => {
+    const { sh, lines, sent, prefilled } = assistant({
+      ok: true,
+      text: 'Du meinst wahrscheinlich ls.',
+      command: 'ls',
+    });
+    await sh.execute('liste');
+    expect(lines[0]).toContain('command not found: liste');
+    expect(sent[0]).toHaveLength(1);
+    expect(sent[0]![0]!.content).toContain('Unbekannter Command: "liste"');
+    expect(prefilled).toEqual(['ls']);
+    await sh.execute('ask Und jetzt?');
+    // die Hilfe zählt nicht zum Gesprächsverlauf
+    expect(sent[1]).toEqual([{ role: 'user', content: 'Und jetzt?' }]);
+  });
+
+  it('stays quiet when the assistant is not available', async () => {
+    const { sh, lines } = assistant({
+      ok: false,
+      error: 'Der KI-Assistent ist gerade nicht erreichbar.',
+    });
+    await sh.execute('liste');
+    expect(lines.join('\n')).not.toContain('nicht erreichbar');
+    expect(lines[0]).toContain('command not found: liste');
+  });
+});
+
 describe('review #76 (client)', () => {
   it('L3: wraps wide characters by terminal cells', () => {
     for (const l of wrap('日本語のテキスト '.repeat(12), 40))

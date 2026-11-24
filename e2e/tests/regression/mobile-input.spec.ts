@@ -22,12 +22,12 @@ test.describe('mobile input @input', () => {
   test('history recall via quick key', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Quick-Keys nur mobil');
     await openTerminal(page);
-    await run(page, 'sudo');
-    await expect(terminalOutput(page)).toContainText('command not found: sudo');
+    await run(page, 'whoami');
+    await expect(terminalOutput(page)).toContainText('Du bist Gast');
     await page.locator('#quickkeys [data-key="up"]').tap();
     await page.keyboard.press('Enter');
     await expect
-      .poll(async () => (await terminalText(page)).match(/command not found: sudo/g)?.length)
+      .poll(async () => (await terminalText(page)).match(/Du bist Gast/g)?.length)
       .toBe(2);
   });
 
@@ -87,9 +87,9 @@ test.describe('touch scrolling @input', () => {
 
   test('swiping scrolls the output without moving the page', async ({ page }) => {
     await openTerminal(page);
-    for (let i = 0; i < 25; i++) await run(page, `cmd${i}`);
+    for (let i = 0; i < 25; i++) await run(page, `echo zeile${i}`);
     const out = terminalOutput(page);
-    await expect(out).toContainText('command not found: cmd24');
+    await expect(out).toContainText('zeile24');
     await expect(out).not.toContainText('an ai coding project');
 
     // Finger nach unten: ältere Ausgabe kommt ins Bild.

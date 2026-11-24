@@ -22,6 +22,8 @@ export async function terminalText(page: Page): Promise<string> {
 /** Tippt einen Command und schickt ihn mit Enter ab. */
 export async function run(page: Page, command: string): Promise<void> {
   await page.locator('#cmd').focus();
+  // Vorschläge des Assistenten (#108) stehen evtl. schon in der Eingabe
+  await page.locator('#cmd').fill('');
   await page.keyboard.type(command);
   await page.keyboard.press('Enter');
 }

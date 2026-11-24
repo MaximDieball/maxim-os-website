@@ -46,6 +46,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('- Projekt ChessBot: Python');
   });
 
+  it('lists the commands of the website and explains the CMD line', () => {
+    const prompt = buildSystemPrompt(undefined);
+    expect(prompt).toContain('- minecraft:');
+    expect(prompt).toContain('- ls:');
+    expect(prompt).toContain('CMD:');
+  });
+
   it('works without content', () => {
     expect(buildSystemPrompt(undefined)).toContain('Assistent der persönlichen Website');
   });

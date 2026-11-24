@@ -81,3 +81,50 @@ test.describe('ask', () => {
     await shows(page, 'internal details', false);
   });
 });
+
+test.describe('assistant fills in commands (#108, #109)', () => {
+  test('suggests minecraft and puts it into the input', async ({ page }) => {
+    await page.route('**/api/minecraft', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ online: false, address: 'minecraft.maxim-dieball.de' }),
+      }),
+    );
+    await openTerminal(page);
+    await run(page, 'ask Wie bekomme ich Infos über den Minecraft-Server?');
+    await idle(page);
+    await shows(page, 'Ich habe ihn dir unten eingefügt.');
+    await shows(page, 'CMD:', false);
+    await shows(page, 'Unten eingefügt: minecraft');
+    await expect(page.locator('#cmd')).toHaveValue('minecraft');
+    // Enter führt ihn aus
+    await page.locator('#cmd').press('Enter');
+    await idle(page);
+    await shows(page, 'gerade offline');
+  });
+
+  test('helps with unknown commands: liste -> ls', async ({ page }) => {
+    await openTerminal(page);
+    await run(page, 'liste');
+    await idle(page);
+    await shows(page, 'command not found: liste');
+    await shows(page, 'Du meinst wahrscheinlich ls');
+    await expect(page.locator('#cmd')).toHaveValue('ls');
+  });
+
+  test('keeps the plain hint when the assistant is not available', async ({ page }) => {
+    await page.route('**/api/ask', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Der KI-Assistent ist gerade nicht erreichbar.' }),
+      }),
+    );
+    await openTerminal(page);
+    await run(page, 'liste');
+    await idle(page);
+    await shows(page, "Tippe 'help --short'.");
+    await shows(page, 'nicht erreichbar', false);
+    await expect(page.locator('#cmd')).toHaveValue('');
+  });
+});

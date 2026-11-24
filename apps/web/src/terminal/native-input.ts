@@ -241,6 +241,16 @@ export function createNativeInput(
       draw();
       editor.focus();
     },
+    prefill(line) {
+      // Nie etwas überschreiben, das der User schon tippt oder gepuffert hat
+      if (input.value || queue.length) return false;
+      const value = sanitizeInput(line);
+      input.value = value;
+      input.setSelectionRange(value.length, value.length);
+      // Gezeichnet wird mit dem nächsten Prompt (läuft gerade ein Command) oder sofort
+      if (!running) draw();
+      return true;
+    },
     run(line) {
       // Klick während einer Frage (y/N) nicht als Antwort werten.
       if (shell.inputPrompt) return;

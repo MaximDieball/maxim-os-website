@@ -87,8 +87,8 @@ test.describe('terminal', () => {
 
   test('submitted commands stay visible behind their prompt', async ({ page }) => {
     await openTerminal(page);
-    await run(page, 'sudo');
-    await expect(terminalOutput(page)).toContainText(`${PROMPT_TEXT} sudo`);
+    await run(page, 'pwd');
+    await expect(terminalOutput(page)).toContainText(`${PROMPT_TEXT} pwd`);
     await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
   });
 
@@ -177,12 +177,10 @@ test.describe('mobile with open keyboard', () => {
 
   test('output auto-scrolls and focus stays after enter', async ({ page }) => {
     await openTerminal(page);
-    for (let i = 0; i < 12; i++) await run(page, `cmd${i}`);
+    // Kurze Ausgaben: die Ansicht folgt bis zum Prompt (lange bleiben oben stehen, #101)
+    for (let i = 0; i < 12; i++) await run(page, i % 2 ? 'pwd' : 'whoami');
     await expect.poll(async () => (await visibleLines(page)).at(-1)).toBe(PROMPT_TEXT);
-    // Die Meldung kann umbrechen: Zeilen vor dem Prompt ohne Leerzeichen zusammensetzen.
-    await expect
-      .poll(async () => (await visibleLines(page)).slice(-3, -1).join('').replace(/\s+/g, ''))
-      .toContain("commandnotfound:cmd11.Tippe'help--short'.");
+    await expect.poll(async () => (await visibleLines(page)).at(-2)).toBe('/');
     await expect(page.locator('#cmd')).toBeFocused();
   });
 

@@ -12,7 +12,7 @@ import type { GithubData } from '../profile/github.ts';
 import type { AskMessage, MinecraftStatus } from '@maxim-os/shared';
 import type { GameScreen } from '../games/run-snake.ts';
 import type { KeyValueStore, Workspace } from '../vfs/workspace.ts';
-import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
+import { CLIENT_HANDLERS, OPERAND_COMPLETIONS, askAssistant } from './commands.ts';
 import { clean } from './format.ts';
 import { History } from './history.ts';
 import { keepTogether, suggestionsIn } from './suggest.ts';
@@ -80,7 +80,12 @@ export interface ShellServices {
     messages: AskMessage[],
     onText: (text: string) => void,
     signal?: AbortSignal,
-  ) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
+  ) => Promise<{ ok: true; text: string; command?: string } | { ok: false; error: string }>;
+  /**
+   * Schreibt einen Command in die Eingabezeile, ohne ihn auszuführen (#108).
+   * `false`, wenn dort schon etwas steht.
+   */
+  prefill?: (command: string) => boolean;
   /** Status des Minecraft-Servers über GET /api/minecraft (#36). */
   minecraft?: (signal?: AbortSignal) => Promise<MinecraftStatus | undefined>;
   /** Spielbildschirm im Terminal (#32). */
@@ -211,6 +216,15 @@ export class Shell {
         .filter((a) => a.command === 'help --short')
         .slice(-1);
       this.out.print([message], [hint]);
+      // Hilfe vom Assistenten: was war gemeint, passender Command unten eingefügt (#109)
+      if (this.services.ask) {
+        const typed = truncate(printable(line, 200), 200);
+        await askAssistant(
+          { out: this.out, shell: this, services: this.services, signal },
+          `Unbekannter Command: "${typed}". Diesen Command gibt es hier nicht. Was wollte ich wahrscheinlich, und was soll ich stattdessen eingeben?`,
+          { remember: false, quiet: true },
+        );
+      }
       return;
     }
     const argv = parseArgs(spec, args);

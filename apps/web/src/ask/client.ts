@@ -1,4 +1,4 @@
-import type { AskMessage, ErrorResponse } from '@maxim-os/shared';
+import { ASK_COMMAND_SEPARATOR, type AskMessage, type ErrorResponse } from '@maxim-os/shared';
 
 /**
  * Client für POST /api/ask (#74). Die Antwort kommt als Text-Stream; `onText` bekommt
@@ -6,7 +6,7 @@ import type { AskMessage, ErrorResponse } from '@maxim-os/shared';
  */
 export const MSG_OFFLINE = 'Der KI-Assistent ist gerade nicht erreichbar.';
 
-export type AskResult = { ok: true; text: string } | { ok: false; error: string };
+export type AskResult = { ok: true; text: string; command?: string } | { ok: false; error: string };
 
 export async function askStream(
   messages: AskMessage[],
@@ -39,11 +39,22 @@ export async function askStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let text = '';
+  // Nach dem Trennzeichen folgt ein Command-Vorschlag als JSON (#108), nicht anzeigen
+  let trailer: string | undefined;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
+      let chunk = decoder.decode(value, { stream: true });
+      if (trailer !== undefined) {
+        trailer += chunk;
+        continue;
+      }
+      const sep = chunk.indexOf(ASK_COMMAND_SEPARATOR);
+      if (sep >= 0) {
+        trailer = chunk.slice(sep + 1);
+        chunk = chunk.slice(0, sep);
+      }
       if (!chunk) continue;
       text += chunk;
       onText(chunk);
@@ -51,5 +62,12 @@ export async function askStream(
   } catch {
     // Abbruch (Ctrl+C) oder Verbindung weg: bisherigen Text behalten
   }
-  return { ok: true, text };
+  let command: string | undefined;
+  try {
+    const parsed = trailer ? (JSON.parse(trailer) as { command?: unknown }) : undefined;
+    if (typeof parsed?.command === 'string') command = parsed.command;
+  } catch {
+    // kaputter Anhang: ohne Vorschlag
+  }
+  return command ? { ok: true, text, command } : { ok: true, text };
 }

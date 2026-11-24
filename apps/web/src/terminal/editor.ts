@@ -14,6 +14,8 @@ export interface LineEditor {
   redraw(): void;
   /** Wird bei jedem abgeschickten Command aufgerufen (z. B. Vorschläge ausblenden, #99). */
   onSubmit?: (line: string) => void;
+  /** Schreibt eine Zeile in die leere Eingabe, ohne sie auszuführen (#108). */
+  prefill(line: string): boolean;
   /** Führt eine Zeile aus, als wäre sie getippt worden (klickbare Zeilen, #90). */
   run(line: string): void;
   /** Gibt einen Hinweis aus und zeichnet danach den Prompt neu. */
