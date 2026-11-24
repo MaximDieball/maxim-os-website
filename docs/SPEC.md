@@ -378,6 +378,8 @@ maxim-os-website/
 
 ## 9. Hosting und Übergabe
 
+**Umsetzung (mvp-8, #37/#38):** `docker-compose.prod.yml` startet nur die Website (gehärtet, ein Port, standardmäßig nur `127.0.0.1:8080` für den Tunnel-Agenten), Konfiguration über `.env` nach Vorlage `.env.example`. Das LLM läuft separat (`docker-compose.llm.yml` oder eigener Stack); die Website hängt in dessen Netz. `make prod` baut mit dem aktuellen Commit (sichtbar in `/api/health`) und startet; `make prod-check` prüft das Setup in der CI.
+
 **Den Heimserver und die playit.gg-Tunnel richte ich selbst ein.** Baue dafür keine Tunnel-Container und keine Server-Konfiguration. Deine Aufgabe ist ein lauffähiges, gehärtetes Docker-Setup:
 
 - Production-Image (Multi-Stage), Nicht-Root-User, `read_only: true`, `cap_drop: ALL`, `no-new-privileges`, Content-Ordner als Read-only-Volume.

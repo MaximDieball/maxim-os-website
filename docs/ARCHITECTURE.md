@@ -146,8 +146,9 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 ## 6. Build, Docker, CI
 
 - **Alles läuft in Containern** (Docker-Regel in `CLAUDE.md`). Wichtige Befehle: `make dev` (Vite auf 5173 + Fastify, Hot-Reload per Polling), `make lint`, `make typecheck`, `make test`, `make build`, `make test-ui`, `make update-baselines`, `make test-ui-screenshots`, `make ci`. Alle Targets: `make help`.
-- **Production-Image** (`docker/Dockerfile.prod`): Build-Stage mit pnpm, Runtime `node:alpine` als `USER node`, Healthcheck. Commit mitgeben: `docker build -f docker/Dockerfile.prod --build-arg GIT_COMMIT=$(git rev-parse HEAD) .`
-- **Laufzeit-Härtung:** `read_only`, `cap_drop: ALL`, `no-new-privileges`, `content/` read-only gemountet (siehe Service `app` in `docker-compose.yml`).
+- **Production-Image** (`docker/Dockerfile.prod`): Build-Stage mit pnpm, Runtime `node:alpine` als `USER node`, Dateien gehören root (nur lesbar), npm/npx/corepack/yarn entfernt (#37), Healthcheck. Commit mitgeben: `--build-arg GIT_COMMIT=…` (macht `make prod` automatisch).
+- **Production-Compose** (`docker-compose.prod.yml`, #38): nur die Website (Projekt `maxim-os-prod`), ein Port `APP_BIND:APP_PORT` (Standard `127.0.0.1:8080`), Konfiguration aus `.env` (Vorlage `.env.example`), hängt zusätzlich im externen Netz des LLM (`LLM_NETWORK`, Standard `maxim-os_llm-net`). `make prod`, `make prod-down`, `make prod-logs`.
+- **Laufzeit-Härtung:** `read_only`, `cap_drop: ALL`, `no-new-privileges`, `content/` read-only, Speicher-, CPU- und PID-Limits, Log-Rotation. `make prod-check` (Teil von `make ci`) startet das gebaute Image mit der Production-Compose-Datei und prüft Health, Nicht-Root, read-only, Capabilities und fehlende Paketmanager.
 - **CI** (`.github/workflows/ci.yml`): Job „Ticketbezug“ (PR-Text und Commits) und Job `make ci` mit Layer-Cache.
 - Stolperfallen: pnpm 12 lehnt sehr neue Pakete ab (`minimumReleaseAge`); TypeScript bleibt bei ~6.0; Imports mit `.ts`-Endung; unter Colima kommen Dateiänderungen nur per Polling in den Container.
 
