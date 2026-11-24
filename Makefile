@@ -4,6 +4,7 @@ TOOLS  = $(DC) --profile tools run --rm tools
 PW     = $(DC) --profile test run --rm --build playwright
 
 .PHONY: help dev down install lint format typecheck test build test-ui test-ui-screenshots \
+	llm llm-down llm-model llm-bench dev-llm \
         update-baselines ci hooks clean portrait
 
 help: ## Zeigt alle Targets
@@ -49,6 +50,30 @@ portrait: ## Erzeugt das ASCII-Porträt aus assets/headshot/image.png nach conte
 
 hooks: ## Aktiviert die Git-Hooks (commit-msg, pre-push)
 	git config core.hooksPath .githooks
+
+# KI-Assistent (#72): Compose mit docker-compose.llm.yml. Variante cpu (Standard) oder gpu.
+LLM_DC      = $(DC) -f docker-compose.yml -f docker-compose.llm.yml
+LLM_VARIANT ?= cpu
+MODEL       ?= qwen3-1.7b
+
+llm-model: ## Lädt ein Modell mit Prüfsumme (MODEL=qwen3-4b|qwen3-1.7b|..., siehe docker/llm/models.tsv)
+	$(LLM_DC) --profile llm-model run --rm llm-model $(MODEL)
+
+llm: ## Startet den KI-Container (LLM_VARIANT=cpu|gpu, LLM_MODEL_FILE=<datei.gguf>)
+	$(LLM_DC) --profile llm-$(LLM_VARIANT) up -d --wait llm-$(LLM_VARIANT)
+
+llm-down: ## Stoppt den KI-Container
+	$(LLM_DC) --profile llm-cpu --profile llm-gpu rm -sf llm-cpu llm-gpu
+
+dev-llm: ## Dev-Server mit KI-Assistent (vorher make llm-model und make llm)
+	$(LLM_DC) up --build dev
+
+llm-bench: ## Misst das laufende LLM: 10 Testfragen, Tokens/s, Zeit bis zum ersten Token (#71)
+	$(LLM_DC) --profile tools run --rm -e LLM_VARIANT=$(LLM_VARIANT) tools pnpm --filter @maxim-os/scripts llm-bench
+	@echo "Speicher des KI-Containers:"
+	@docker stats --no-stream --format '  {{.Name}}: {{.MemUsage}}' $$(docker ps -q --filter name=llm-$(LLM_VARIANT))
+	@if [ "$(LLM_VARIANT)" = gpu ]; then echo "GPU-Speicher:"; \
+	  docker exec $$(docker ps -q --filter name=llm-gpu) nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader || true; fi
 
 clean: ## Entfernt Container und node_modules-Volumes
 	$(DC) --profile tools --profile test down --volumes --remove-orphans

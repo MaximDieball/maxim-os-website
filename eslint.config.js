@@ -23,6 +23,13 @@ export default tseslint.config(
     },
   },
   {
+    // Kleine Node-Skripte ohne TypeScript (Stub-LLM, Modell-Download): Node-Globals erlauben.
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', URL: 'readonly', fetch: 'readonly' },
+    },
+  },
+  {
     // Sicherheitsregel 1: Der Server startet niemals Prozesse.
     files: ['apps/server/**/*.ts'],
     rules: {
