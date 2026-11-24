@@ -180,7 +180,7 @@ Zeigt eine Boot-Animation mit einem ASCII-Ladebalken. Danach öffnet die Website
 
 ### minecraft
 
-Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-dieball.de`): Online-Status, Spielerzahl, Spielerliste, Version, MOTD und Ping. Der Browser kann das Minecraft-Protokoll nicht selbst sprechen, deshalb gibt es dafür **einen Server-Endpunkt** (`GET /api/minecraft`, Server-List-Ping mit `minecraft-server-util`). Er nimmt keine Parameter vom User, cached die Antwort einige Sekunden und hat ein Timeout. Adresse und Port kommen aus Umgebungsvariablen. Ist der Server offline, wird das freundlich angezeigt.
+Zeigt eine kleine Übersicht meines Minecraft-Servers (Adresse `minecraft.maxim-dieball.de`): Online-Status, Spielerzahl, Spielerliste, Version, MOTD und Ping. Der Browser kann das Minecraft-Protokoll nicht selbst sprechen, deshalb gibt es dafür **einen Server-Endpunkt** (`GET /api/minecraft`, Server-List-Ping mit `minecraft-server-util`). Er nimmt keine Parameter vom User, cached die Antwort einige Sekunden und hat ein Timeout. Adresse und Port kommen aus Umgebungsvariablen. Ist der Server offline, wird das freundlich angezeigt. Umsetzung: `MINECRAFT_HOST` (Standard `minecraft.maxim-dieball.de`, leer schaltet die Route ab) und `MINECRAFT_PORT` (25565), SRV-Einträge werden beachtet, Cache 10 s, Zeitlimit ca. 3 s. Alias `mc`. Ist der Website-Server nicht erreichbar, meldet der Command das kurz.
 
 ### steckbrief
 

@@ -217,6 +217,9 @@ importers:
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
+      minecraft-server-util:
+        specifier: ^5.4.4
+        version: 5.4.4
 
   apps/web:
     dependencies:
@@ -1013,6 +1016,15 @@ packages:
     resolution: {integrity: sha512-jSCU7/VB1loIWBZe14aEYHU/+1UMEHoaO7qxCOVJOw9GgH72VAWppxNcjU+x9a2k3GSIBXNKxXQFqRvvZ7vr3A==}
     engines: {node: '>=10.0.0'}
     hasBin: true
+
+  minecraft-motd-util@1.1.12:
+    resolution: {integrity: sha512-5TuTRjrRupSTruea0nRC37r0FdhkS1O4wIJKAYfwJRCQd/X4Zyl/dVIs96h9UVW6N8jhIuz9pNkrDsqyN7VBdA==}
+    deprecated: no longer maintained
+
+  minecraft-server-util@5.4.4:
+    resolution: {integrity: sha512-uaE0N9PHPtJudi8BlCvKDD9K30w23ZpeS1I53wEJo9nX0HSmg5qFvwj8gMG0CYCUwWH/g5hjKaGAwXXN/vhMJw==}
+    engines: {node: '>=10.0.0'}
+    deprecated: no longer maintained, please use https://mcstatus.io
 
   minimatch@11.0.9:
     resolution: {integrity: sha512-KCFkfyjqerNlSstjlhIGNXIKZGA/6O4V4RlhZ+Dsr621SPPw0mzlypE9D9ZOoPiVefHID+j7/XuMMlqfD/F60Q==}
@@ -2082,6 +2094,12 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   mime@3.0.0: {}
+
+  minecraft-motd-util@1.1.12: {}
+
+  minecraft-server-util@5.4.4:
+    dependencies:
+      minecraft-motd-util: 1.1.12
 
   minimatch@11.0.9:
     dependencies:

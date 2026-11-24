@@ -240,6 +240,41 @@ describe('watchthis (#34)', () => {
   });
 });
 
+describe('minecraft (#36)', () => {
+  function mc(result: unknown) {
+    const { out, lines } = fakeOutput(80);
+    out.replaceLast = (l) => {
+      lines[lines.length - 1] = stripAnsi(l);
+    };
+    const sh = new Shell(out, undefined, {
+      minecraft: async () => result as never,
+    });
+    return { sh, lines };
+  }
+
+  it('shows the status and replaces the waiting line', async () => {
+    const { sh, lines } = mc({
+      online: true,
+      address: 'minecraft.maxim-dieball.de',
+      players: { online: 1, max: 10, names: ['Steve'] },
+      latencyMs: 30,
+    });
+    await sh.execute('mc');
+    expect(lines.join('\n')).not.toContain('Frage den Minecraft-Server');
+    expect(lines[0]).toContain('● online');
+    expect(lines.join('\n')).toContain('Steve');
+  });
+
+  it('is friendly when offline or unreachable', async () => {
+    const off = mc({ online: false, address: 'x' });
+    await off.sh.execute('minecraft');
+    expect(off.lines.join('\n')).toContain('gerade offline');
+    const gone = mc(undefined);
+    await gone.sh.execute('minecraft');
+    expect(gone.lines.at(-1)).toContain('Status gerade nicht abrufbar');
+  });
+});
+
 describe('snake (#32, #33)', () => {
   function game(mobile: boolean) {
     const { out, lines } = fakeOutput(80);

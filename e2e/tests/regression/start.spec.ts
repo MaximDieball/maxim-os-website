@@ -22,7 +22,12 @@ test.describe('start suggestions', () => {
     await firstVisit(page, isMobile);
     const chips = page.locator('#suggestions');
     await expect(chips).toBeVisible();
-    await expect(chips.locator('button')).toHaveText([/projects/, /watchthis/, /snake/]);
+    await expect(chips.locator('button')).toHaveText([
+      /projects/,
+      /watchthis/,
+      /snake/,
+      /minecraft/,
+    ]);
 
     const box = (await chips.boundingBox())!;
     const term = (await page.locator('#term').boundingBox())!;

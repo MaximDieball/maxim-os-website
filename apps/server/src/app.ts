@@ -2,7 +2,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { ErrorResponse, HealthResponse, Snapshot } from '@maxim-os/shared';
+import type { ErrorResponse, HealthResponse, MinecraftStatus, Snapshot } from '@maxim-os/shared';
 
 export interface RateLimitOptions {
   /** Anfragen an /api/* insgesamt pro Zeitfenster. */
@@ -19,6 +19,8 @@ export interface AppOptions {
   /** Build-Version (Commit-SHA) für /api/health. */
   version?: string;
   rateLimit?: RateLimitOptions;
+  /** Status des Minecraft-Servers für GET /api/minecraft (#35); ohne: Route fehlt. */
+  minecraft?: () => Promise<MinecraftStatus>;
 }
 
 const BODY_LIMIT_BYTES = 4 * 1024;
@@ -113,6 +115,15 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       void reply.header('etag', etag).header('cache-control', 'no-cache');
       if (request.headers['if-none-match'] === etag) return reply.status(304).send();
       return reply.type('application/json; charset=utf-8').send(body);
+    });
+  }
+
+  // Minecraft-Status (#35): keine Parameter, der Server cached selbst (minecraft.ts).
+  const minecraft = options.minecraft;
+  if (minecraft) {
+    app.get('/api/minecraft', limited, async (_request, reply): Promise<MinecraftStatus> => {
+      void reply.header('cache-control', 'no-store');
+      return minecraft();
     });
   }
 
