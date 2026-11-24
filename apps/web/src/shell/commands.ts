@@ -358,6 +358,9 @@ const ask: ClientHandler = async (ctx) => {
 
   const history = askHistory.get(ctx.shell) ?? [];
   const messages: AskMessage[] = [...history, { role: 'user', content: question }];
+  // Gesamtbudget des Servers einhalten: älteste Paare zuerst weglassen (#76, L4)
+  const size = (): number => messages.reduce((n, m) => n + m.content.length, 0);
+  while (messages.length > 1 && size() > ASK_LIMITS.totalChars) messages.splice(0, 2);
   const width = Math.max(20, ctx.out.cols() - 1);
   ctx.out.print([style.dim('denkt nach …')]);
   let text = '';

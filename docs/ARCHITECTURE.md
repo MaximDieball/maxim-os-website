@@ -157,7 +157,7 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 
 ## 7. Tests
 
-**KI in Tests (#75):** Vitest testet `/api/ask` gegen einen Fake-Upstream. Die UI-Tests laufen gegen `e2e/llm-stub/server.mjs` (Compose-Dienst `llm-stub`, nur Profil `test`): OpenAI-kompatibel, feste Antworten, gesteuert über Wörter in der Frage (`langsam`, `lang`, `escape`, `verlauf`, `kaputt`). Ein echtes Modell braucht die CI nie.
+**KI in Tests (#75):** Vitest testet `/api/ask` gegen einen Fake-Upstream. Die UI-Tests laufen gegen `e2e/llm-stub/server.mjs` (Compose-Dienst `llm-stub`, nur Profil `test`): OpenAI-kompatibel, feste Antworten, gesteuert über Wörter in der Frage (`langsam`, `lang`, `escape`, `verlauf`, `kaputt`). Ein echtes Modell braucht die CI nie. Der Stub hängt wie das echte LLM nur in einem internen Netz (`llm-test`) ohne Internet.
 
 | Art                                                      | Ort                                            | Läuft in der Pipeline |
 | -------------------------------------------------------- | ---------------------------------------------- | --------------------- |

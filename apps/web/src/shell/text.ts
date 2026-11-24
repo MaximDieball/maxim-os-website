@@ -20,21 +20,51 @@ export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-/** Bricht Text wortweise auf `width` Zeichen um. */
+// Breite Zeichen (CJK, Fullwidth, Emoji) belegen zwei Terminalzellen.
+const WIDE =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u;
+
+/** Breite in Terminalzellen (breite Zeichen zählen doppelt). */
+export function cellWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) width += WIDE.test(ch) ? 2 : 1;
+  return width;
+}
+
+/** Teilt ein Wort, das breiter ist als `width`, nach Zellen (nie mitten in einem Zeichen). */
+function splitCells(word: string, width: number): string[] {
+  const parts: string[] = [];
+  let part = '';
+  for (const ch of word) {
+    if (part && cellWidth(part + ch) > width) {
+      parts.push(part);
+      part = '';
+    }
+    part += ch;
+  }
+  if (part) parts.push(part);
+  return parts;
+}
+
+/**
+ * Bricht Text wortweise auf `width` Terminalzellen um. Breite Zeichen zählen doppelt
+ * (#76, L3), damit z. B. chinesische Antworten nicht über den Rand laufen.
+ */
 export function wrap(text: string, width: number): string[] {
   const out: string[] = [];
   let line = '';
   // Geschützte Leerzeichen (\u00a0) trennen nicht, z. B. in 'help\u00a0--short'.
   for (const word of text.split(/[ \t\n\r\f\v]+/).filter(Boolean)) {
     if (!line) line = word;
-    else if (line.length + 1 + word.length <= width) line += ` ${word}`;
+    else if (cellWidth(line) + 1 + cellWidth(word) <= width) line += ` ${word}`;
     else {
       out.push(line);
       line = word;
     }
-    while (line.length > width) {
-      out.push(line.slice(0, width));
-      line = line.slice(width);
+    if (cellWidth(line) > width) {
+      const parts = splitCells(line, width);
+      out.push(...parts.slice(0, -1));
+      line = parts.at(-1) ?? '';
     }
   }
   if (line) out.push(line);

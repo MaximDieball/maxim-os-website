@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { COMMANDS, findCommand, type AskMessage, type Snapshot } from '@maxim-os/shared';
+import {
+  ASK_LIMITS,
+  COMMANDS,
+  findCommand,
+  type AskMessage,
+  type Snapshot,
+} from '@maxim-os/shared';
 import type { GithubData } from '../profile/github.ts';
 import { Workspace, type KeyValueStore } from '../vfs/workspace.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
@@ -7,7 +13,7 @@ import { suggestionsIn } from './suggest.ts';
 import type { GameScreen } from '../games/run-snake.ts';
 import { gameKeyFor } from '../terminal/game-screen.ts';
 import { History } from './history.ts';
-import { sanitizeInput, stripAnsi } from './text.ts';
+import { cellWidth, sanitizeInput, stripAnsi, wrap } from './text.ts';
 import { Shell, type LineAction, type ShellOutput } from './shell.ts';
 
 function fakeOutput(cols = 100) {
@@ -309,6 +315,47 @@ describe('ask (#74)', () => {
     const { sh, lines } = assistant([['a\u001b[2Jb']]);
     await sh.execute('ask x');
     expect(lines.join('')).not.toContain('\u001b');
+  });
+});
+
+describe('review #76 (client)', () => {
+  it('L3: wraps wide characters by terminal cells', () => {
+    for (const l of wrap('日本語のテキスト '.repeat(12), 40))
+      expect(cellWidth(l)).toBeLessThanOrEqual(40);
+    expect(wrap('日本語'.repeat(30), 10).every((l) => cellWidth(l) <= 10)).toBe(true);
+    // ASCII unverändert
+    expect(wrap('eins zwei drei', 9)).toEqual(['eins zwei', 'drei']);
+  });
+
+  it('L4: drops the oldest pairs to stay within the total budget', async () => {
+    const { out } = fakeOutput(80);
+    out.replaceLast = () => {};
+    const sent: AskMessage[][] = [];
+    const sh = new Shell(out, undefined, {
+      ask: async (messages, onText) => {
+        sent.push(messages);
+        onText('b'.repeat(1500));
+        return { ok: true, text: 'b'.repeat(1500) };
+      },
+    });
+    for (let i = 0; i < 4; i++) await sh.execute(`ask Frage ${i}`);
+    for (const m of sent) {
+      expect(m.reduce((n, x) => n + x.content.length, 0)).toBeLessThanOrEqual(
+        ASK_LIMITS.totalChars,
+      );
+      expect(m.at(-1)!.role).toBe('user');
+    }
+    expect(sent[3]!.length).toBeLessThan(7);
+  });
+
+  it('L6: keeps the redirect for free text with an apostrophe', async () => {
+    const { sh, ws } = setup();
+    const shell = new Shell(fakeOutput(80).out, ws, {
+      ask: async (_m, onText) => (onText('Gut'), { ok: true, text: 'Gut' }),
+    });
+    void sh;
+    await shell.execute("ask Wie geht's? > antwort.txt");
+    expect(ws.fs.readText('/antwort.txt')).toContain('Gut');
   });
 });
 
