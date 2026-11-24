@@ -151,6 +151,10 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 - **CI** (`.github/workflows/ci.yml`): Job „Ticketbezug“ (PR-Text und Commits) und Job `make ci` mit Layer-Cache.
 - Stolperfallen: pnpm 12 lehnt sehr neue Pakete ab (`minimumReleaseAge`); TypeScript bleibt bei ~6.0; Imports mit `.ts`-Endung; unter Colima kommen Dateiänderungen nur per Polling in den Container.
 
+### KI-Container (#72)
+
+`docker-compose.llm.yml` (zusammen mit `docker-compose.yml`): Profile `llm-cpu` und `llm-gpu` mit llama-server (gepinnte llama.cpp-Images, GPU als CUDA-12-Build für Pascal). Nur im Netz `llm-net` (`internal: true`, Alias `llm`), kein Port, kein Internet, Nicht-Root, read-only, keine Capabilities, Speicher- und CPU-Limits, Healthcheck auf `/health`. Das Modell liegt im Volume `llm-models` (read-only eingehängt); `make llm-model` lädt es mit fester URL und SHA-256 aus `docker/llm/models.tsv` (nur dieser Dienst hat Internet). `make dev-llm` startet den Dev-Server zusätzlich im `llm-net`. `make llm-bench` (`scripts/src/llm-bench*.ts`) misst ein laufendes Modell mit 10 Testfragen und dem echten Systemprompt. Details: `docs/llm-model.md`, `docs/llm-spike.md`.
+
 ## 7. Tests
 
 **KI in Tests (#75):** Vitest testet `/api/ask` gegen einen Fake-Upstream. Die UI-Tests laufen gegen `e2e/llm-stub/server.mjs` (Compose-Dienst `llm-stub`, nur Profil `test`): OpenAI-kompatibel, feste Antworten, gesteuert über Wörter in der Frage (`langsam`, `lang`, `escape`, `verlauf`, `kaputt`). Ein echtes Modell braucht die CI nie.

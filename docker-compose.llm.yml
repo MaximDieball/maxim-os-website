@@ -1,0 +1,87 @@
+# KI-Assistent (#72): llama-server mit einem kleinen Modell. Nutzung zusammen mit
+# docker-compose.yml, z. B. `make llm` (CPU) oder `make llm LLM_VARIANT=gpu`.
+# Der Server kann das LLM auch in einem eigenen Stack betreiben (#84); die Website kennt
+# nur LLM_URL (OpenAI-kompatibel: /v1/chat/completions, /health).
+name: maxim-os
+
+x-llm: &llm # Nur im internen Netz: kein veröffentlichter Port, kein Internet
+  networks:
+    llm-net:
+      aliases: [llm]
+  user: '65534:65534'
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  volumes:
+    - llm-models:/models:ro
+  # Platz lassen für Website und Minecraft-Server (ca. 6 GB RAM frei)
+  mem_limit: ${LLM_MEM_LIMIT:-5g}
+  cpus: ${LLM_CPUS:-6}
+  restart: unless-stopped
+  healthcheck:
+    test: ['CMD', 'curl', '-fs', 'http://127.0.0.1:8080/health']
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 60s
+
+x-llm-env: &llm-env
+  LLAMA_ARG_HOST: 0.0.0.0
+  LLAMA_ARG_PORT: '8080'
+  LLAMA_ARG_MODEL: /models/${LLM_MODEL_FILE:-Qwen3-1.7B-Q4_K_M.gguf}
+  LLAMA_ARG_CTX_SIZE: ${LLM_CTX_SIZE:-4096}
+  # Ein Slot: die Website schickt ohnehin nur eine Anfrage gleichzeitig (#73)
+  LLAMA_ARG_N_PARALLEL: '1'
+  LLAMA_ARG_THREADS: ${LLM_THREADS:-6}
+
+services:
+  # CPU-Variante: läuft überall (auch auf dem Mac), Fallback auf dem Server
+  llm-cpu:
+    <<: *llm
+    image: ghcr.io/ggml-org/llama.cpp:server-b12627
+    profiles: ['llm-cpu']
+    environment:
+      <<: *llm-env
+      LLAMA_ARG_N_GPU_LAYERS: '0'
+
+  # GPU-Variante: GTX 1050 Ti (Pascal) braucht einen CUDA-12-Build (CUDA 13 kann Pascal nicht)
+  llm-gpu:
+    <<: *llm
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda12-b12627
+    profiles: ['llm-gpu']
+    environment:
+      <<: *llm-env
+      LLAMA_ARG_MODEL: /models/${LLM_MODEL_FILE:-Qwen3-4B-Instruct-2507-Q4_K_M.gguf}
+      LLAMA_ARG_N_GPU_LAYERS: ${LLM_GPU_LAYERS:-99}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Lädt ein Modell mit fester URL und Prüfsumme (make llm-model). Nur dieser Dienst hat Internet.
+  llm-model:
+    # glibc-Image: Alpines Resolver scheitert unter Colima/Docker Desktop an IPv6-Antworten
+    image: node:26.13.1-bookworm-slim
+    profiles: ['llm-model']
+    user: '0:0'
+    entrypoint: ['node', '/llm/fetch-model.mjs']
+    volumes:
+      - llm-models:/models
+      - ./docker/llm:/llm:ro
+
+  # Die Entwicklungsumgebung und das Benchmark-Werkzeug erreichen das LLM über llm-net
+  dev:
+    networks: [default, llm-net]
+  tools:
+    networks: [default, llm-net]
+
+networks:
+  llm-net:
+    internal: true
+
+volumes:
+  llm-models:

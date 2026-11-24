@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "portrait": "node src/portrait-cli.ts"
+    "portrait": "node src/portrait-cli.ts",
+    "llm-bench": "node --conditions=source src/llm-bench-cli.ts"
   },
   "devDependencies": {
     "@types/pngjs": "^6.0.5",
