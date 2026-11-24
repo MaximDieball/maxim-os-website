@@ -1,8 +1,10 @@
 import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  ASK_COMMAND_SEPARATOR,
   ASK_LIMITS,
   CONTROL_CHARS,
+  findCommand,
   type AskMessage,
   type AskStatus,
   type ErrorResponse,
@@ -137,6 +139,76 @@ export function filterAnswer(): ((chunk: string) => string) & { end(): string } 
   return Object.assign(f, {
     end: () => (thinking ? '' : emit(carry)),
   });
+}
+
+/**
+ * Prüft einen vom Modell vorgeschlagenen Command (#108): nur registrierte Commands,
+ * ohne Steuerzeichen, kurz. Auch verändernde Commands sind erlaubt (Entscheidung des
+ * Besitzers); eingefügt wird nur in die Eingabe, ausgeführt erst mit Enter.
+ */
+export function validCommand(raw: string): string | undefined {
+  const command = stripControls(raw)
+    .replace(/[`"„“]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!command || command.length > 120) return undefined;
+  return findCommand(command.split(' ')[0]!) ? command : undefined;
+}
+
+const CMD_LINE = /^\s*(cmd|befehl)\s*:/i;
+const CMD_STARTS = ['cmd:', 'befehl:'];
+
+/**
+ * Nimmt eine Zeile `CMD: <command>` aus der Antwort (#108). Normale Zeilen werden
+ * sofort weitergegeben; nur der Anfang einer Zeile, der noch `CMD:` werden könnte,
+ * wird kurz zurückgehalten. Der erste gültige Command gewinnt.
+ */
+export function commandExtractor(): {
+  push(text: string): string;
+  end(): { text: string; command?: string };
+} {
+  let line = '';
+  let mode: 'unknown' | 'plain' | 'cmd' = 'unknown';
+  let command: string | undefined;
+  const couldBeCmd = (s: string): boolean => {
+    const t = s.replace(/\s+/g, '').toLowerCase();
+    return CMD_STARTS.some((p) => p.startsWith(t));
+  };
+  const finish = (): string => {
+    let out = '';
+    if (mode === 'cmd') command ??= validCommand(line.replace(CMD_LINE, ''));
+    else if (mode === 'unknown') out = line;
+    line = '';
+    mode = 'unknown';
+    return out;
+  };
+  return {
+    push(text) {
+      let out = '';
+      for (const c of text) {
+        if (c === '\n') {
+          const wasCmd = mode === 'cmd';
+          out += finish();
+          if (!wasCmd) out += '\n';
+          continue;
+        }
+        line += c;
+        if (mode === 'plain') out += c;
+        else if (mode === 'unknown') {
+          if (CMD_LINE.test(line)) mode = 'cmd';
+          else if (!couldBeCmd(line)) {
+            mode = 'plain';
+            out += line;
+          }
+        }
+      }
+      return out;
+    },
+    end() {
+      const text = finish();
+      return { text, command };
+    },
+  };
 }
 
 /** Warteschlange: höchstens `maxRunning` am Modell, `maxWaiting` warten, sonst „beschäftigt“. */
@@ -337,19 +409,25 @@ export function createAsk(options: AskOptions): (app: FastifyInstance) => Promis
         }
 
         const filter = filterAnswer();
+        const commands = commandExtractor();
         const body = upstream.body;
         async function* answer(): AsyncGenerator<string> {
           let total = 0;
           try {
             for await (const delta of deltas(body)) {
-              const text = filter(delta);
+              const text = commands.push(filter(delta));
               if (!text) continue;
               total += text.length;
               yield text;
               if (total >= MAX_ANSWER_CHARS) return;
             }
-            const rest = filter.end();
-            if (rest) yield rest;
+            const rest = commands.push(filter.end());
+            const last = commands.end();
+            if (rest + last.text) yield rest + last.text;
+            // Vorgeschlagener Command nach einem Trennzeichen, das das Modell nicht erzeugen kann
+            if (last.command) {
+              yield ASK_COMMAND_SEPARATOR + JSON.stringify({ command: last.command });
+            }
           } catch (error) {
             // Abbruch oder Fehler mitten in der Antwort: einfach beenden
             if (!controller.signal.aborted) options.onError?.(error);

@@ -4,9 +4,11 @@ import { buildApp } from './app.ts';
 import { Readable } from 'node:stream';
 import {
   RateLimit,
+  commandExtractor,
   createAsk,
   filterAnswer,
   streamWithRelease,
+  validCommand,
   validateAsk,
   type AskOptions,
 } from './ask.ts';
@@ -415,5 +417,60 @@ describe('review #76', () => {
     release();
     const statuses = await Promise.all([running, ...fresh].map(async (p) => (await p).status));
     expect(statuses).toEqual([200, 200, 200, 200]);
+  });
+});
+
+// Command-Vorschläge in die Eingabe (#108)
+describe('suggested commands', () => {
+  it('takes the CMD line out of the answer, also across chunks', () => {
+    const x = commandExtractor();
+    const shown = [
+      x.push('Mit dem Befehl minecraft siehst du den Status. Ich habe ihn unten eingefügt.\nCM'),
+      x.push('D: `minecraft`'),
+    ].join('');
+    const end = x.end();
+    expect(shown + end.text).toBe(
+      'Mit dem Befehl minecraft siehst du den Status. Ich habe ihn unten eingefügt.\n',
+    );
+    expect(end.command).toBe('minecraft');
+  });
+
+  it('streams normal lines right away and keeps the first valid command only', () => {
+    const x = commandExtractor();
+    expect(x.push('Hallo')).toBe('Hallo');
+    x.push('\nBefehl: ls -la\nCMD: snake');
+    expect(x.end().command).toBe('ls -la');
+  });
+
+  it('drops unknown commands but still hides the line', () => {
+    const x = commandExtractor();
+    const shown = x.push('Text\nCMD: sudo rm -rf /\n');
+    const end = x.end();
+    expect(shown + end.text).toBe('Text\n');
+    expect(end.command).toBeUndefined();
+  });
+
+  it('accepts any registered command, also ones that change files', () => {
+    expect(validCommand('rm -r projects')).toBe('rm -r projects');
+    expect(validCommand('"reset"')).toBe('reset');
+    expect(validCommand('cd   projects ')).toBe('cd projects');
+    expect(validCommand('nope')).toBeUndefined();
+    expect(validCommand('x'.repeat(200))).toBeUndefined();
+  });
+
+  it('sends the command after a separator the model cannot produce', async () => {
+    const up = fakeUpstream(
+      () => new Response(sse(['Probier ', 'ls.\n', 'CMD: ls']), { status: 200 }),
+    );
+    const { app: a } = await start({ fetch: up.fetchFn });
+    expect((await ask(a, question())).body).toBe('Probier ls.\n\u001e{"command":"ls"}');
+  });
+
+  it('the model cannot fake the separator', async () => {
+    const up = fakeUpstream(
+      () => new Response(sse(['a\u001e{"command":"reset"}']), { status: 200 }),
+    );
+    const { app: a } = await start({ fetch: up.fetchFn });
+    expect((await ask(a, question())).body).toBe('a{"command":"reset"}');
   });
 });

@@ -356,7 +356,33 @@ const ask: ClientHandler = async (ctx) => {
     return ctx.shell.error(`ask: Frage zu lang (höchstens ${ASK_LIMITS.userChars} Zeichen).`);
   }
 
-  const history = askHistory.get(ctx.shell) ?? [];
+  await askAssistant(ctx, question, { remember: true });
+};
+
+/** Gültiger Command-Vorschlag des Assistenten: erstes Wort ist ein registrierter Command. */
+const suggestion = (raw: string | undefined): string | undefined => {
+  const command = clean(raw ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return command && command.length <= 120 && findCommand(command.split(' ')[0]!)
+    ? command
+    : undefined;
+};
+
+/**
+ * Fragt den Assistenten und streamt die Antwort (#74). Schlägt er einen Command vor,
+ * landet der in der (leeren) Eingabe, ausgeführt wird er erst mit Enter (#108).
+ * `remember`: in den Gesprächsverlauf von `ask` aufnehmen. `quiet`: Fehler nicht
+ * anzeigen (Hilfe bei unbekannten Commands, #109).
+ */
+export async function askAssistant(
+  ctx: Pick<CommandContext, 'out' | 'shell' | 'services' | 'signal'>,
+  question: string,
+  options: { remember: boolean; quiet?: boolean },
+): Promise<void> {
+  const service = ctx.services.ask;
+  if (!service) return;
+  const history = options.remember ? (askHistory.get(ctx.shell) ?? []) : [];
   const messages: AskMessage[] = [...history, { role: 'user', content: question }];
   // Gesamtbudget des Servers einhalten: älteste Paare zuerst weglassen (#76, L4)
   const size = (): number => messages.reduce((n, m) => n + m.content.length, 0);
@@ -385,13 +411,20 @@ const ask: ClientHandler = async (ctx) => {
   );
   if (ctx.signal?.aborted) return;
   if (!result.ok) {
+    if (options.quiet) return void ctx.out.replaceLast?.('');
     ctx.out.replaceLast?.(style.dim('…'));
     return ctx.shell.error(result.error);
   }
+  const command = suggestion(result.command);
   if (!text.trim()) {
-    ctx.out.replaceLast?.(style.dim('(keine Antwort)'));
-    return;
+    // Kleine Modelle schicken manchmal nur die CMD-Zeile: dann ein kurzer Satz dazu
+    if (command) ctx.out.replaceLast?.(`Dafür gibt es den Command ${command}.`);
+    else return void ctx.out.replaceLast?.(options.quiet ? '' : style.dim('(keine Antwort)'));
   }
+  if (command && ctx.services.prefill?.(command)) {
+    ctx.out.print([style.dim(`↳ Unten eingefügt: ${command} · Enter zum Ausführen`)]);
+  }
+  if (!options.remember) return;
   // Verlauf: nur vollständige Paare, höchstens ASK_LIMITS.historyPairs
   const answer = result.text.trim().slice(0, ASK_LIMITS.assistantChars);
   askHistory.set(
@@ -400,7 +433,7 @@ const ask: ClientHandler = async (ctx) => {
       -ASK_LIMITS.historyPairs * 2,
     ),
   );
-};
+}
 
 /** `minecraft` (#36): Status über den Website-Server, der den Minecraft-Server pingt. */
 const minecraft: ClientHandler = async (ctx) => {

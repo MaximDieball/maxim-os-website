@@ -53,3 +53,15 @@ export const ASK_LIMITS = {
   /** Alle Nachrichten zusammen (Kontext des Modells schonen, #76). */
   totalChars: 4000,
 } as const;
+
+/**
+ * Trennt im Antwort-Stream von /api/ask den Text von einem vorgeschlagenen Command
+ * (#108): `<text>\u001e{"command":"minecraft"}`. Das Modell kann dieses Steuerzeichen
+ * nicht erzeugen, weil der Server alle Steuerzeichen aus der Antwort entfernt.
+ */
+export const ASK_COMMAND_SEPARATOR = '\u001e';
+
+/** Anhang nach ASK_COMMAND_SEPARATOR. */
+export interface AskSuggestion {
+  command: string;
+}

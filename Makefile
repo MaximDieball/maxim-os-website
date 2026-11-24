@@ -2,6 +2,8 @@
 DC    ?= docker compose
 TOOLS  = $(DC) --profile tools run --rm tools
 PW     = $(DC) --profile test run --rm --build playwright
+# Stub-LLM immer frisch starten (sonst läuft nach Änderungen am Stub die alte Version)
+STUB   = $(DC) --profile test up -d --force-recreate --wait llm-stub
 
 .PHONY: help dev down install lint format typecheck test build test-ui test-ui-screenshots \
 	llm llm-down llm-model llm-bench dev-llm \
@@ -35,12 +37,15 @@ build: ## Baut das Production-Image
 	$(DC) --profile test build app
 
 test-ui: ## Playwright-Regressionstests (toHaveScreenshot), wie in der CI
+	$(STUB)
 	$(PW) test tests/regression
 
 test-ui-screenshots: ## Playwright-Screenshots fürs Entwickler-Review nach artifacts/screenshots
+	$(STUB)
 	$(PW) test tests/review
 
 update-baselines: ## Erzeugt Regressions-Baselines neu (nur im Container)
+	$(STUB)
 	$(PW) test tests/regression --update-snapshots
 
 ci: lint typecheck test build test-ui ## Komplette Pipeline-Checkliste lokal

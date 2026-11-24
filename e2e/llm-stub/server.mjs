@@ -6,6 +6,8 @@
 //   "escape"  -> Antwort mit Escape-Sequenzen (müssen gefiltert werden)
 //   "verlauf" -> nennt die Zahl der Nachrichten (Verlauf wird mitgeschickt)
 //   "kaputt"  -> Fehler 500
+//   "unbekannter command" -> Hilfe mit CMD-Zeile (bei "liste": ls)
+//   "minecraft" -> Antwort mit CMD-Zeile (CMD über Chunk-Grenzen verteilt)
 import { createServer } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -15,6 +17,28 @@ const LONG =
 function answerFor(messages) {
   const q = String(messages.at(-1)?.content ?? '').toLowerCase();
   if (q.includes('kaputt')) return { status: 500 };
+  if (q.includes('unbekannter command')) {
+    return q.includes('liste')
+      ? {
+          chunks: [
+            'Du meinst wahrscheinlich ls: ',
+            'Damit siehst du die Dateien im Ordner. ',
+            'Ich habe es dir unten eingefügt.\nCM',
+            'D: ls',
+          ],
+        }
+      : { chunks: ['Das gibt es hier nicht. Probier help --short.\n', 'CMD: help --short'] };
+  }
+  if (q.includes('minecraft')) {
+    return {
+      chunks: [
+        'Mit dem Befehl minecraft siehst du, ',
+        'ob mein Server online ist. ',
+        'Ich habe ihn dir unten eingefügt.\n',
+        'CMD: `minecraft`',
+      ],
+    };
+  }
   if (q.includes('langsam'))
     return { chunks: Array.from({ length: 40 }, (_, i) => `Wort${i} `), delay: 250 };
   if (q.includes('escape'))
