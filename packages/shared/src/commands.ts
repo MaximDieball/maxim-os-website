@@ -121,6 +121,17 @@ export const COMMANDS: readonly CommandSpec[] = [
     operands: NONE,
   },
   {
+    name: 'minecraft',
+    group: 'links',
+    aliases: ['mc'],
+    description: 'Status meines Minecraft-Servers: online, Spieler, Version und Ping.',
+    usage: 'minecraft',
+    example: 'minecraft',
+    flags: [],
+    operands: NONE,
+    redirect: true,
+  },
+  {
     name: 'snake',
     group: 'play',
     aliases: [],

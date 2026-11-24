@@ -5,6 +5,7 @@ import { runMatrix, shouldSkipBoot } from './boot/matrix.ts';
 import { startscreenLines } from './boot/startscreen.ts';
 import { withSuggestions } from './shell/suggest.ts';
 import { createGameScreen } from './terminal/game-screen.ts';
+import { loadMinecraft } from './minecraft/status.ts';
 import { createSuggestions } from './terminal/suggestions.ts';
 import { bindScrollArrow } from './terminal/scroll-arrow.ts';
 import { browserStorage } from './vfs/workspace.ts';
@@ -61,6 +62,7 @@ async function boot(): Promise<void> {
         github: () => loadGithub({ storage: sessionStore() }),
         readme: (repo) => loadReadme(repo, { storage: sessionStore() }),
         openUrl: (url) => void window.open(url, '_blank', 'noopener,noreferrer'),
+        minecraft: (signal) => loadMinecraft({ signal }),
         gameScreen: () =>
           createGameScreen(view.term, termEl.querySelector<HTMLElement>('.xterm-screen'), form),
         isMobile,

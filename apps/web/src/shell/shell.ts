@@ -9,6 +9,7 @@ import {
 } from '@maxim-os/shared';
 import { VfsError } from '../vfs/vfs.ts';
 import type { GithubData } from '../profile/github.ts';
+import type { MinecraftStatus } from '@maxim-os/shared';
 import type { GameScreen } from '../games/run-snake.ts';
 import type { KeyValueStore, Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
@@ -71,6 +72,8 @@ export interface ShellServices {
   github?: () => Promise<GithubData | undefined>;
   /** Wartet `ms` Millisekunden; endet sofort bei Abbruch (im Test ersetzbar). */
   delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Status des Minecraft-Servers über GET /api/minecraft (#36). */
+  minecraft?: (signal?: AbortSignal) => Promise<MinecraftStatus | undefined>;
   /** Spielbildschirm im Terminal (#32). */
   gameScreen?: () => GameScreen;
   /** Handy bzw. Touch-Gerät ohne feinen Zeiger: Minigames werden nicht unterstützt (#33). */

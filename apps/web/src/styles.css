@@ -197,6 +197,18 @@ body {
   }
 }
 
+/* Sehr schmal (ab 360 px): vier Chips passen noch in eine Zeile. */
+@media (max-width: 400px) {
+  .suggestions {
+    gap: 5px;
+    max-width: calc(100% - 12px);
+  }
+  .suggestion {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+}
+
 .term .xterm-viewport {
   overscroll-behavior: contain;
 }

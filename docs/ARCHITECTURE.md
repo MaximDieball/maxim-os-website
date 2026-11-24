@@ -16,13 +16,14 @@ Browser (apps/web)                                     Server (apps/server, Fast
 │ Shell: Parser, Registry, Command-Handler    │  GET    │   liest content/, keine Symlinks  │
 │ Virtuelles Dateisystem (Vfs) im Speicher    │ ──────► │ GET /api/fs      (Snapshot, ETag) │
 │ Workspace: Kopie im localStorage, reset     │ /api/fs │ GET /api/health  (Status, Version)│
+│ minecraft: Status über /api/minecraft       │         │ GET /api/minecraft (Ping, Cache)  │
 │ Theme "Glass", Matrix-Animation, Logo       │         │ statisches Frontend (apps/web)    │
 └────────────────────────────────────────────┘         └──────────────────────────────────┘
         │ steckbrief, projects, project <name> (inkl. README)
         └──► api.github.com (direkt vom Browser, 30 min gecacht, Fallback content/about/)
 ```
 
-Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp-7) bekommen je einen eigenen Server-Endpunkt.
+`minecraft` (mvp-6) hat einen eigenen Server-Endpunkt, weil der Browser das Minecraft-Protokoll nicht sprechen kann. Geplant (siehe SPEC): `ask` mit einem LLM-Container (mvp-7).
 
 ## 2. Repo-Aufbau
 
@@ -70,6 +71,7 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 | `shell/commands.ts`                     | Alle Command-Handler, Schlüssel = Registry-Name                                                                                                                                                                                                                                                                                                                                                                                      |
 | `shell/format.ts`                       | Ausgabeformate für `ls`, `tree`, `cat` (breit und schmal), `clean()` gegen Terminal-Injection                                                                                                                                                                                                                                                                                                                                        |
 | `shell/help.ts`                         | `help` aus der Registry, gruppiert nach Wichtigkeit: Tabelle oder gestapelt; `help --short` (passt auf einen Bildschirm, Dateien/System nur als Namen); `help <command>` (Details). Jeder Eintrag öffnet per Klick `help <command>`                                                                                                                                                                                                  |
+| `minecraft/status.ts`                   | `loadMinecraft` (GET /api/minecraft, Timeout, Abbruch per Ctrl+C) und `formatMinecraft` (Übersicht, schmale Variante, Offline-Fall) für den Command `minecraft` (#36)                                                                                                                                                                                                                                                                |
 | `terminal/scroll-arrow.ts`              | Pfeil nach unten (#101): sichtbar, wenn die Ansicht nicht unten steht; eigene Ebene (`position: fixed`) über dem unsichtbaren Eingabefeld, Position aus dem Panel berechnet                                                                                                                                                                                                                                                          |
 | `terminal/suggestions.ts`               | Command-Vorschläge als Chips unten im Startscreen (#99): nur registrierte Commands, Klick = `editor.run`, weg nach dem ersten Command (`editor.onSubmit`), ausgeblendet, wenn sie den Prompt überdecken würden (Messung über die Cursor-Zeile)                                                                                                                                                                                       |
 | `shell/suggest.ts`                      | Klickbare, hervorgehobene Command-Vorschläge in Texten (Startscreen, Hinweise, `about`, Fehlermeldungen)                                                                                                                                                                                                                                                                                                                             |
@@ -108,12 +110,13 @@ Geplant (siehe SPEC): `minecraft` (mvp-6) und `ask` mit einem LLM-Container (mvp
 
 ## 4. Shared (`packages/shared/src`)
 
-| Datei         | Inhalt                                                                                                                                                                                                                                                                                                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `commands.ts` | **Command-Registry**: Name, **Gruppe**, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist. Sortiert nach `COMMAND_GROUPS`: Über mich → Projekte und Links → Im Terminal ausprobieren → Dateien → System |
-| `parse.ts`    | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                                                                                                                                                       |
-| `snapshot.ts` | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                                                                                                                                                   |
-| `api.ts`      | `HealthResponse`, `ErrorResponse`                                                                                                                                                                                                                                                                                   |
+| Datei          | Inhalt                                                                                                                                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commands.ts`  | **Command-Registry**: Name, **Gruppe**, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist. Sortiert nach `COMMAND_GROUPS`: Über mich → Projekte und Links → Im Terminal ausprobieren → Dateien → System |
+| `parse.ts`     | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                                                                                                                                                       |
+| `snapshot.ts`  | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                                                                                                                                                   |
+| `minecraft.ts` | Minecraft-Status (#35): Server-List-Ping über `minecraft-server-util` (mit SRV), eigenes Zeitlimit, 10 s Cache, gleichzeitige Anfragen teilen sich einen Ping, Texte ohne Steuer- und §-Farbcodes, nur gültige Spielernamen; Fehler = `{ online: false }`, Details nur ins Log                                      |
+| `api.ts`       | `HealthResponse`, `ErrorResponse`                                                                                                                                                                                                                                                                                   |
 
 Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet, im Build `dist/`.
 
@@ -127,12 +130,13 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 
 **Endpunkte**
 
-| Route             | Antwort                                                                                                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/health` | `{ status: 'ok', version }`, `version` = Commit aus dem Build-Arg `GIT_COMMIT` (sonst `dev`). Hängt von nichts Externem ab |
-| `GET /api/fs`     | Snapshot als JSON, `ETag` = Snapshot-Version, `Cache-Control: no-cache`, 304 bei passendem `If-None-Match`                 |
+| Route                | Antwort                                                                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`    | `{ status: 'ok', version }`, `version` = Commit aus dem Build-Arg `GIT_COMMIT` (sonst `dev`). Hängt von nichts Externem ab                                                                                  |
+| `GET /api/fs`        | Snapshot als JSON, `ETag` = Snapshot-Version, `Cache-Control: no-cache`, 304 bei passendem `If-None-Match`                                                                                                  |
+| `GET /api/minecraft` | `MinecraftStatus` (Typ in `shared/api.ts`): online, Adresse, Version, MOTD, Spieler (Anzahl, Namen), Ping. Keine Parameter, `Cache-Control: no-store`, eigener Cache. Fehlt, wenn `MINECRAFT_HOST` leer ist |
 
-**Umgebungsvariablen:** `PORT` (3000), `HOST`, `CONTENT_DIR` (`/content`), `PUBLIC_DIR` (`/app/public`), `APP_VERSION` (aus `GIT_COMMIT`).
+**Umgebungsvariablen:** `PORT` (3000), `HOST`, `CONTENT_DIR` (`/content`), `PUBLIC_DIR` (`/app/public`), `APP_VERSION` (aus `GIT_COMMIT`), `MINECRAFT_HOST` (`minecraft.maxim-dieball.de`, leer = Route aus), `MINECRAFT_PORT` (25565).
 
 ## 6. Build, Docker, CI
 

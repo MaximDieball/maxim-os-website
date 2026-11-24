@@ -10,6 +10,7 @@ import {
   type GithubData,
 } from '../profile/github.ts';
 import { runSnake } from '../games/run-snake.ts';
+import { formatMinecraft } from '../minecraft/status.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
 import { keepTogether, withSuggestions } from './suggest.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
@@ -323,6 +324,26 @@ const watchthis: ClientHandler = async (ctx) => {
   ]);
 };
 
+/** `minecraft` (#36): Status über den Website-Server, der den Minecraft-Server pingt. */
+const minecraft: ClientHandler = async (ctx) => {
+  const load = ctx.services.minecraft;
+  if (!load) return ctx.shell.error('minecraft: hier nicht verfügbar.');
+  ctx.out.print([style.dim('Frage den Minecraft-Server …')]);
+  const status = await load(ctx.signal);
+  if (ctx.signal?.aborted) return;
+  if (!status) {
+    ctx.out.replaceLast?.(style.dim('…'));
+    return ctx.shell.error('minecraft: Status gerade nicht abrufbar. Bitte später nochmal.');
+  }
+  const { lines, actions } = formatMinecraft(status, ctx.out.cols());
+  // Die Warte-Zeile durch die erste Zeile ersetzen
+  ctx.out.replaceLast?.(lines[0]!);
+  ctx.out.print(
+    ctx.out.replaceLast ? lines.slice(1) : lines,
+    ctx.out.replaceLast ? actions.slice(1) : actions,
+  );
+};
+
 /**
  * `snake` (#32). Auf Handys zuerst eine Warnung mit (y/N), Standard ist Abbruch (#33):
  * Es gibt keine Touch-Steuerung.
@@ -440,6 +461,7 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   projects,
   project,
   watchthis,
+  minecraft,
   snake,
   about,
   whoami,
