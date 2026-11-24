@@ -32,8 +32,18 @@ const minecraft =
 // KI-Assistent (#73): nur über LLM_URL im internen Netz; LLM_URL="" schaltet /api/ask ab.
 const llmUrl = process.env.LLM_URL ?? 'http://llm:8080';
 let logAskError: (error: unknown) => void = () => {};
+/** Ganze Zahl aus der Umgebung, sonst der Standard. */
+const envInt = (name: string, fallback: number): number => {
+  const n = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
 const ask = llmUrl
   ? createAsk({
+      // Standard 10/min pro Client, 60/min global; nur die UI-Tests setzen mehr
+      rateLimit: {
+        perClient: envInt('ASK_RATE_PER_CLIENT', 10),
+        global: envInt('ASK_RATE_GLOBAL', 60),
+      },
       llmUrl,
       apiKey: process.env.LLM_API_KEY || undefined,
       systemPrompt: buildSystemPrompt(snapshot),

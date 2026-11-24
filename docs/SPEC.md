@@ -235,6 +235,8 @@ Ein zweiter Container hostet ein kleines Sprachmodell. Im Terminal stellt man ih
 | --- | --- | --- |
 | `ask <frage>` | `-n` | Fragt den KI-Assistenten. Die Antwort wird gestreamt. `-n` beginnt ein neues Gespräch. |
 
+Die Frage ist Freitext: Ein einzelnes Apostroph (z. B. „Wie geht's?“) ist erlaubt.
+
 - Der Browser merkt sich die letzten 4 Frage-Antwort-Paare der Sitzung (nur im Speicher) und schickt sie als Kontext mit. `clear` leert nur den Bildschirm; den Verlauf verwerfen nur `ask -n` oder ein Neuladen der Seite.
 - `Ctrl+C` bricht eine laufende Antwort ab, der Server bricht dann auch die Anfrage an das Modell ab.
 - Während das Modell rechnet, zeigt das Terminal einen kurzen Hinweis (z. B. `denkt nach …`). Ist der KI-Container nicht erreichbar oder ausgelastet, kommt eine freundliche Meldung (`Der KI-Assistent ist gerade nicht erreichbar.` bzw. `… ist gerade beschäftigt, versuch es gleich nochmal.`).
@@ -253,7 +255,7 @@ Browser ──POST /api/ask──► Fastify (app) ──HTTP, internes Netz─�
   - Body: `{ messages: [{ role: 'user' | 'assistant', content: string }] }`, max. 9 Nachrichten, letzte ist `user`; User-Nachricht max. 500 Zeichen, Assistant-Nachricht max. 2000 Zeichen; strikte Validierung, unbekannte Felder abgelehnt.
   - Der Server setzt den Systemprompt davor, begrenzt die Antwort (`max_tokens` ca. 384), setzt Kontextgröße und Temperatur fest und streamt den Text als `text/plain` (chunked) zurück. Kein WebSocket.
   - **Gleichzeitigkeit:** höchstens 1 Anfrage läuft am Modell, höchstens 3 warten; sonst `503` mit „beschäftigt“. Timeout für die ganze Antwort 90 s. Bricht der Browser ab, bricht der Server die Upstream-Anfrage ab.
-  - **Rate-Limit** eigenes, strengeres Limit: z. B. 10 Fragen pro Minute pro Client und 60 pro Minute global.
+  - **Rate-Limit** eigenes, strengeres Limit: z. B. 10 Fragen pro Minute pro Client und 60 pro Minute global. Umsetzung: `ASK_RATE_PER_CLIENT` (10) und `ASK_RATE_GLOBAL` (60); nur die UI-Tests setzen höhere Werte, weil alle Tests vom selben Browser fragen.
   - Fehler und Ausfälle des Modells ergeben generische Meldungen, nie Details aus dem Container.
   - `GET /api/ask/status` liefert `{ online: boolean }` (gecacht), damit `ask` und `help` den Zustand zeigen können.
 - Ohne `llm`-Container läuft die Website vollständig weiter, nur `ask` meldet „nicht erreichbar“.
