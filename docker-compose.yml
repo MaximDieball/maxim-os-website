@@ -57,6 +57,13 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
+    environment:
+      # UI-Tests: Stub statt echtem Modell (#75); Minecraft wird im Browser abgefangen
+      LLM_URL: http://llm-stub:8080
+      # Alle UI-Tests fragen vom selben Browser aus: Rate-Limit nur hier hochsetzen
+      ASK_RATE_PER_CLIENT: '1000'
+      ASK_RATE_GLOBAL: '1000'
+      MINECRAFT_HOST: ''
     volumes:
       - ./content:/content:ro
     healthcheck:
@@ -69,6 +76,27 @@ services:
       timeout: 3s
       retries: 15
 
+  # Stub für den KI-Assistenten (#75): feste Antworten, kein Modell, nur im Test-Profil.
+  llm-stub:
+    image: node:26.13.1-alpine
+    profiles: ['test']
+    user: node
+    command: ['node', '/stub/server.mjs']
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    volumes:
+      - ./e2e/llm-stub:/stub:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   playwright:
     build:
       context: .
@@ -77,6 +105,8 @@ services:
     profiles: ['test']
     depends_on:
       app:
+        condition: service_healthy
+      llm-stub:
         condition: service_healthy
     ipc: host
     environment:

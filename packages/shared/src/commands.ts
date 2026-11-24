@@ -44,6 +44,11 @@ export interface CommandSpec {
   readonly pathOperands?: boolean;
   /** Argumente werden nicht als Flags gelesen (z. B. echo). */
   readonly rawArgs?: boolean;
+  /**
+   * Freitext (z. B. `ask`): Lässt sich die Zeile nicht zerlegen (einzelnes Apostroph wie
+   * in „Wie geht's?“), wird der Rest der Zeile als ein Argument genommen.
+   */
+  readonly freeText?: boolean;
   /** Ausgabe darf mit `>`/`>>` in eine Datei umgeleitet werden. */
   readonly redirect?: boolean;
   /** Verändert das Dateisystem (danach wird gespeichert). */
@@ -129,6 +134,20 @@ export const COMMANDS: readonly CommandSpec[] = [
     example: 'minecraft',
     flags: [],
     operands: NONE,
+    redirect: true,
+  },
+  {
+    name: 'ask',
+    group: 'play',
+    aliases: [],
+    description:
+      'Frag den KI-Assistenten etwas über mich oder MAXIM OS. -n beginnt ein neues Gespräch.',
+    usage: 'ask [-n] <frage>',
+    example: 'ask Wer ist Maxim?',
+    flags: [{ short: 'n', description: 'neues Gespräch (Verlauf vergessen)' }],
+    operands: { min: 0, max: 80, label: 'Frage' },
+    rawArgs: true,
+    freeText: true,
     redirect: true,
   },
   {

@@ -1,4 +1,4 @@
-import { COMMANDS, findCommand } from '@maxim-os/shared';
+import { ASK_LIMITS, COMMANDS, findCommand, type AskMessage } from '@maxim-os/shared';
 import { MSG, VfsError, type VNode } from '../vfs/vfs.ts';
 import type { Workspace } from '../vfs/workspace.ts';
 import { clean, formatCat, formatLs, formatTree, type DirEntry, type TreeNode } from './format.ts';
@@ -14,7 +14,7 @@ import { formatMinecraft } from '../minecraft/status.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
 import { keepTogether, withSuggestions } from './suggest.ts';
 import { FS_UNAVAILABLE, type ClientHandler, type CommandContext } from './shell.ts';
-import { stripAnsi, style } from './text.ts';
+import { stripAnsi, style, wrap } from './text.ts';
 
 /**
  * Alle Command-Handler, Schlüssel ist der Registry-Name. Flags und Argumente sind
@@ -324,6 +324,81 @@ const watchthis: ClientHandler = async (ctx) => {
   ]);
 };
 
+/** Gesprächsverlauf pro Shell, nur im Speicher (SPEC 4b: letzte 4 Paare). */
+const askHistory = new WeakMap<object, AskMessage[]>();
+
+/** Antwort-Text als Zeilen: Absätze bleiben, jeder Absatz bricht auf die Breite um. */
+const answerLines = (text: string, width: number): string[] =>
+  clean(text.replace(/\r/g, ''))
+    .split('\n')
+    .flatMap((p) => (p.trim() ? wrap(p, width) : ['']));
+
+/**
+ * `ask` (#74): fragt den KI-Assistenten und zeigt die Antwort Wort für Wort. Weil der
+ * Umbruch gierig ist, ändert sich beim Streamen nur die letzte Zeile: sie wird ersetzt,
+ * neue Zeilen werden angehängt.
+ */
+const ask: ClientHandler = async (ctx) => {
+  const service = ctx.services.ask;
+  if (!service) return ctx.shell.error('ask: hier nicht verfügbar.');
+  let args = [...ctx.operands];
+  const fresh = args[0] === '-n';
+  if (fresh) {
+    args = args.slice(1);
+    askHistory.delete(ctx.shell);
+  }
+  const question = args.join(' ').trim();
+  if (!question) {
+    if (fresh) return ctx.out.print([style.dim('Neues Gespräch. Frag einfach: ask <frage>')]);
+    return ctx.shell.error('ask: Frage fehlt. Beispiel: ask Woran arbeitet Maxim gerade?');
+  }
+  if (question.length > ASK_LIMITS.userChars) {
+    return ctx.shell.error(`ask: Frage zu lang (höchstens ${ASK_LIMITS.userChars} Zeichen).`);
+  }
+
+  const history = askHistory.get(ctx.shell) ?? [];
+  const messages: AskMessage[] = [...history, { role: 'user', content: question }];
+  const width = Math.max(20, ctx.out.cols() - 1);
+  ctx.out.print([style.dim('denkt nach …')]);
+  let text = '';
+  let shown = 0;
+  const render = (): void => {
+    const lines = answerLines(text, width);
+    if (!lines.length) return;
+    // Die letzte schon gezeigte Zeile (bzw. „denkt nach …“) ersetzen, den Rest anhängen
+    const from = Math.max(0, shown - 1);
+    ctx.out.replaceLast?.(lines[from]!);
+    if (lines.length > from + 1) ctx.out.print(lines.slice(from + 1));
+    shown = lines.length;
+  };
+
+  const result = await service(
+    messages,
+    (chunk) => {
+      text += chunk;
+      render();
+    },
+    ctx.signal,
+  );
+  if (ctx.signal?.aborted) return;
+  if (!result.ok) {
+    ctx.out.replaceLast?.(style.dim('…'));
+    return ctx.shell.error(result.error);
+  }
+  if (!text.trim()) {
+    ctx.out.replaceLast?.(style.dim('(keine Antwort)'));
+    return;
+  }
+  // Verlauf: nur vollständige Paare, höchstens ASK_LIMITS.historyPairs
+  const answer = result.text.trim().slice(0, ASK_LIMITS.assistantChars);
+  askHistory.set(
+    ctx.shell,
+    [...messages, { role: 'assistant' as const, content: answer }].slice(
+      -ASK_LIMITS.historyPairs * 2,
+    ),
+  );
+};
+
 /** `minecraft` (#36): Status über den Website-Server, der den Minecraft-Server pingt. */
 const minecraft: ClientHandler = async (ctx) => {
   const load = ctx.services.minecraft;
@@ -462,6 +537,7 @@ export const CLIENT_HANDLERS: Readonly<Record<string, ClientHandler>> = Object.f
   project,
   watchthis,
   minecraft,
+  ask,
   snake,
   about,
   whoami,

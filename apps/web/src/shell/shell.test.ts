@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMMANDS, findCommand, type Snapshot } from '@maxim-os/shared';
+import { COMMANDS, findCommand, type AskMessage, type Snapshot } from '@maxim-os/shared';
 import type { GithubData } from '../profile/github.ts';
 import { Workspace, type KeyValueStore } from '../vfs/workspace.ts';
 import { formatCommandHelp, formatHelp, formatHelpShort } from './help.ts';
@@ -237,6 +237,78 @@ describe('watchthis (#34)', () => {
     controller.abort();
     await sh.execute('watchthis', controller.signal);
     expect(opened).toEqual([]);
+  });
+});
+
+describe('ask (#74)', () => {
+  function assistant(answers: (string[] | { error: string })[], cols = 40) {
+    const { out, lines } = fakeOutput(cols);
+    out.replaceLast = (l) => {
+      lines[lines.length - 1] = stripAnsi(l);
+    };
+    const sent: AskMessage[][] = [];
+    const sh = new Shell(out, undefined, {
+      ask: async (messages, onText) => {
+        sent.push(messages);
+        const a = answers[Math.min(sent.length - 1, answers.length - 1)]!;
+        if (!Array.isArray(a)) return { ok: false, error: a.error };
+        for (const chunk of a) onText(chunk);
+        return { ok: true, text: a.join('') };
+      },
+    });
+    return { sh, lines, sent };
+  }
+
+  it('streams the answer, wrapped to the width, replacing the thinking line', async () => {
+    const { sh, lines } = assistant([
+      ['Maxim baut ', 'gerade MAXIM OS, eine Website ', 'im Stil eines Terminals.'],
+    ]);
+    await sh.execute('ask Woran arbeitet Maxim?');
+    expect(lines).not.toContain('denkt nach …');
+    expect(lines.join(' ')).toBe(
+      'Maxim baut gerade MAXIM OS, eine Website im Stil eines Terminals.',
+    );
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(40);
+  });
+
+  it('keeps the last pairs as context and forgets them with -n', async () => {
+    const { sh, sent } = assistant([['Eins'], ['Zwei'], ['Drei']]);
+    await sh.execute('ask erste Frage');
+    await sh.execute('ask zweite Frage');
+    expect(sent[1]).toEqual([
+      { role: 'user', content: 'erste Frage' },
+      { role: 'assistant', content: 'Eins' },
+      { role: 'user', content: 'zweite Frage' },
+    ]);
+    await sh.execute('ask -n dritte Frage');
+    expect(sent[2]).toEqual([{ role: 'user', content: 'dritte Frage' }]);
+  });
+
+  it('keeps at most four pairs', async () => {
+    const { sh, sent } = assistant([['ok']]);
+    for (let i = 0; i < 6; i++) await sh.execute(`ask Frage ${i}`);
+    expect(sent[5]).toHaveLength(9);
+    expect(sent[5]![0]).toEqual({ role: 'user', content: 'Frage 1' });
+  });
+
+  it("accepts apostrophes like in Wie geht's", async () => {
+    const { sh, sent } = assistant([['Gut']]);
+    await sh.execute("ask Wie geht's dir?");
+    expect(sent[0]).toEqual([{ role: 'user', content: "Wie geht's dir?" }]);
+  });
+
+  it('shows friendly errors and needs a question', async () => {
+    const { sh, lines } = assistant([{ error: 'Der KI-Assistent ist gerade nicht erreichbar.' }]);
+    await sh.execute('ask Hallo');
+    expect(lines.at(-1)).toBe('Der KI-Assistent ist gerade nicht erreichbar.');
+    await sh.execute('ask');
+    expect(lines.at(-1)).toContain('ask: Frage fehlt');
+  });
+
+  it('removes escape sequences from the answer', async () => {
+    const { sh, lines } = assistant([['a\u001b[2Jb']]);
+    await sh.execute('ask x');
+    expect(lines.join('')).not.toContain('\u001b');
   });
 });
 

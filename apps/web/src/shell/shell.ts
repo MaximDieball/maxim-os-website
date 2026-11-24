@@ -9,7 +9,7 @@ import {
 } from '@maxim-os/shared';
 import { VfsError } from '../vfs/vfs.ts';
 import type { GithubData } from '../profile/github.ts';
-import type { MinecraftStatus } from '@maxim-os/shared';
+import type { AskMessage, MinecraftStatus } from '@maxim-os/shared';
 import type { GameScreen } from '../games/run-snake.ts';
 import type { KeyValueStore, Workspace } from '../vfs/workspace.ts';
 import { CLIENT_HANDLERS, OPERAND_COMPLETIONS } from './commands.ts';
@@ -72,6 +72,15 @@ export interface ShellServices {
   github?: () => Promise<GithubData | undefined>;
   /** Wartet `ms` Millisekunden; endet sofort bei Abbruch (im Test ersetzbar). */
   delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Fragt den KI-Assistenten (#74). `onText` bekommt die Antwort Stück für Stück.
+   * Ergebnis: vollständige Antwort oder eine freundliche Fehlermeldung.
+   */
+  ask?: (
+    messages: AskMessage[],
+    onText: (text: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
   /** Status des Minecraft-Servers über GET /api/minecraft (#36). */
   minecraft?: (signal?: AbortSignal) => Promise<MinecraftStatus | undefined>;
   /** Spielbildschirm im Terminal (#32). */
@@ -174,8 +183,13 @@ export class Shell {
     this.history.push(line);
     if (!line) return;
 
-    const parsed = tokenize(line);
-    if (!parsed.ok) return this.error(parsed.error);
+    let parsed = tokenize(line);
+    if (!parsed.ok) {
+      // Freitext-Commands (ask): ein einzelnes Apostroph ist kein Fehler
+      const first = /^\S+/.exec(line)?.[0] ?? '';
+      if (!findCommand(first)?.freeText) return this.error(parsed.error);
+      parsed = { ok: true, tokens: [first, line.slice(first.length).trim()] };
+    }
     const [name = '', ...args] = parsed.tokens;
 
     const spec = findCommand(name);
