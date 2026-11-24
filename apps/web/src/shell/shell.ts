@@ -188,7 +188,16 @@ export class Shell {
       // Freitext-Commands (ask): ein einzelnes Apostroph ist kein Fehler
       const first = /^\S+/.exec(line)?.[0] ?? '';
       if (!findCommand(first)?.freeText) return this.error(parsed.error);
-      parsed = { ok: true, tokens: [first, line.slice(first.length).trim()] };
+      // Umleitung am Ende bleibt erhalten: ask wie geht's? > antwort.txt (#76, L6)
+      const rest = line.slice(first.length).trim();
+      const redirect = /\s(>>?)\s*([^\s'"<>]+)$/.exec(` ${rest}`);
+      parsed = redirect
+        ? {
+            ok: true,
+            tokens: [first, ` ${rest}`.slice(0, redirect.index).trim()],
+            redirect: { target: redirect[2]!, append: redirect[1] === '>>' },
+          }
+        : { ok: true, tokens: [first, rest] };
     }
     const [name = '', ...args] = parsed.tokens;
 

@@ -44,6 +44,13 @@ const STATUS_TTL_MS = 15_000;
 const stripControls = (text: string): string =>
   [...text].filter((c) => c === '\n' || !CONTROL_CHARS.test(c)).join('');
 
+/**
+ * Steuer-Token von Chat-Vorlagen (z. B. `<|im_start|>`, `<start_of_turn>`): Damit kann
+ * niemand eigene Rollen (system) in den Verlauf schmuggeln (#76).
+ */
+const TEMPLATE_TOKENS =
+  /<\|[^|<>\s]{1,40}\|>|<\/?(start_of_turn|end_of_turn|bos|eos|s)>|\[\/?INST\]/gi;
+
 /** Prüft den Body streng; gibt die bereinigten Nachrichten zurück oder undefined. */
 export function validateAsk(body: unknown): AskMessage[] | undefined {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
@@ -62,10 +69,12 @@ export function validateAsk(body: unknown): AskMessage[] | undefined {
     if (typeof content !== 'string') return undefined;
     const max = role === 'user' ? ASK_LIMITS.userChars : ASK_LIMITS.assistantChars;
     if (content.length > max) return undefined;
-    const clean = stripControls(content).trim();
+    const clean = stripControls(content).replace(TEMPLATE_TOKENS, ' ').trim();
     if (!clean) return undefined;
     out.push({ role, content: clean });
   }
+  // Gesamtbudget: lange Verläufe würden den einzigen Slot lange blockieren
+  if (out.reduce((n, m) => n + m.content.length, 0) > ASK_LIMITS.totalChars) return undefined;
   return out.at(-1)!.role === 'user' ? out : undefined;
 }
 
@@ -170,8 +179,11 @@ class Gate {
   }
 }
 
-/** Gleitendes Fenster: pro Client und global. */
-class RateLimit {
+/**
+ * Gleitendes Fenster: pro Client und global. Achtung: Hinter einem Tunnel ohne echte
+ * Client-IP haben alle Besucher dieselbe Adresse, dann wirkt `perClient` global (#76, M1).
+ */
+export class RateLimit {
   private readonly perClient = new Map<string, number[]>();
   private all: number[] = [];
   private readonly limits: { perClient: number; global: number; windowMs?: number };
@@ -181,13 +193,20 @@ class RateLimit {
     this.now = now;
   }
 
+  /** Anzahl gemerkter Clients (für Tests). */
+  get size(): number {
+    return this.perClient.size;
+  }
+
   allow(client: string): boolean {
     const t = this.now();
     const since = t - (this.limits.windowMs ?? 60_000);
     this.all = this.all.filter((x) => x > since);
     const mine = (this.perClient.get(client) ?? []).filter((x) => x > since);
     if (mine.length >= this.limits.perClient || this.all.length >= this.limits.global) {
-      this.perClient.set(client, mine);
+      // Abgelehnte ohne Einträge nicht speichern (sonst wächst die Map, #76)
+      if (mine.length) this.perClient.set(client, mine);
+      else this.perClient.delete(client);
       return false;
     }
     mine.push(t);
@@ -232,6 +251,16 @@ async function* deltas(body: ReadableStream<Uint8Array>): AsyncGenerator<string>
   }
 }
 
+/**
+ * Antwort-Stream, der den Platz in der Warteschlange in jedem Fall wieder freigibt,
+ * auch wenn er zerstört wird, bevor der Generator anläuft (#76, L1).
+ */
+export function streamWithRelease(source: AsyncGenerator<string>, release: () => void): Readable {
+  const stream = Readable.from(source);
+  stream.once('close', release);
+  return stream;
+}
+
 const sendError = (reply: FastifyReply, status: number, error: string): FastifyReply => {
   const body: ErrorResponse = { error };
   return reply.status(status).header('cache-control', 'no-store').send(body);
@@ -249,105 +278,114 @@ export function createAsk(options: AskOptions): (app: FastifyInstance) => Promis
   let status: { at: number; value: AskStatus } | undefined;
 
   return async (app) => {
-    app.post('/api/ask', { bodyLimit: 32 * 1024 }, async (request, reply) => {
-      const messages = validateAsk(request.body);
-      if (!messages) return sendError(reply, 400, MSG_INVALID);
-      if (!limit.allow(request.ip)) return sendError(reply, 429, MSG_RATE);
+    // Zusätzlich das globale Limit für /api/* (#76, L2)
+    app.post(
+      '/api/ask',
+      { bodyLimit: 32 * 1024, config: { rateLimit: {} } },
+      async (request, reply) => {
+        const messages = validateAsk(request.body);
+        if (!messages) return sendError(reply, 400, MSG_INVALID);
+        if (!limit.allow(request.ip)) return sendError(reply, 429, MSG_RATE);
 
-      // Abbruch: Browser weg oder Zeit abgelaufen -> Anfrage ans Modell abbrechen
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 90_000);
-      reply.raw.on('close', () => {
-        if (!reply.raw.writableFinished) controller.abort();
-      });
-      const done = (): void => clearTimeout(timer);
-
-      const entered = await gate.enter(controller.signal);
-      if (entered === undefined) {
-        done();
-        return sendError(reply, 503, MSG_BUSY);
-      }
-      if (!entered) {
-        done();
-        return sendError(reply, 503, MSG_OFFLINE);
-      }
-
-      let released = false;
-      const release = (): void => {
-        if (released) return;
-        released = true;
-        done();
-        gate.leave();
-      };
-
-      let upstream: Response;
-      try {
-        upstream = await doFetch(`${base}/v1/chat/completions`, {
-          method: 'POST',
-          headers,
-          signal: controller.signal,
-          body: JSON.stringify({
-            messages: [{ role: 'system', content: options.systemPrompt }, ...messages],
-            stream: true,
-            max_tokens: options.maxTokens ?? 384,
-            temperature: options.temperature ?? 0.6,
-            // Modelle mit „Denkmodus“ (z. B. Qwen3): direkt antworten
-            chat_template_kwargs: { enable_thinking: false },
-          }),
+        // Abbruch: Browser weg oder Zeit abgelaufen -> Anfrage ans Modell abbrechen
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 90_000);
+        reply.raw.on('close', () => {
+          if (!reply.raw.writableFinished) controller.abort();
         });
-        if (!upstream.ok || !upstream.body) throw new Error(`llm status ${upstream.status}`);
-      } catch (error) {
-        release();
-        controller.abort();
-        options.onError?.(error);
-        return sendError(reply, 503, MSG_OFFLINE);
-      }
+        const done = (): void => clearTimeout(timer);
 
-      const filter = filterAnswer();
-      const body = upstream.body;
-      async function* answer(): AsyncGenerator<string> {
-        let total = 0;
-        try {
-          for await (const delta of deltas(body)) {
-            const text = filter(delta);
-            if (!text) continue;
-            total += text.length;
-            yield text;
-            if (total >= MAX_ANSWER_CHARS) return;
-          }
-          const rest = filter.end();
-          if (rest) yield rest;
-        } catch (error) {
-          // Abbruch oder Fehler mitten in der Antwort: einfach beenden
-          if (!controller.signal.aborted) options.onError?.(error);
-        } finally {
-          controller.abort();
-          release();
+        const entered = await gate.enter(controller.signal);
+        if (entered === undefined) {
+          done();
+          return sendError(reply, 503, MSG_BUSY);
         }
-      }
+        if (!entered) {
+          done();
+          return sendError(reply, 503, MSG_OFFLINE);
+        }
 
-      return reply
-        .header('cache-control', 'no-store')
-        .header('x-content-type-options', 'nosniff')
-        .type('text/plain; charset=utf-8')
-        .send(Readable.from(answer()));
-    });
+        let released = false;
+        const release = (): void => {
+          if (released) return;
+          released = true;
+          done();
+          gate.leave();
+        };
 
-    app.get('/api/ask/status', async (_request, reply): Promise<AskStatus> => {
-      void reply.header('cache-control', 'no-store');
-      if (status && now() - status.at < STATUS_TTL_MS) return status.value;
-      let online: boolean;
-      try {
-        const res = await doFetch(`${base}/health`, {
-          headers,
-          signal: AbortSignal.timeout(2000),
-        });
-        online = res.ok;
-      } catch {
-        online = false;
-      }
-      status = { at: now(), value: { online } };
-      return status.value;
-    });
+        let upstream: Response;
+        try {
+          upstream = await doFetch(`${base}/v1/chat/completions`, {
+            method: 'POST',
+            headers,
+            signal: controller.signal,
+            body: JSON.stringify({
+              messages: [{ role: 'system', content: options.systemPrompt }, ...messages],
+              stream: true,
+              max_tokens: options.maxTokens ?? 384,
+              temperature: options.temperature ?? 0.6,
+              // Modelle mit „Denkmodus“ (z. B. Qwen3): direkt antworten
+              chat_template_kwargs: { enable_thinking: false },
+            }),
+          });
+          if (!upstream.ok || !upstream.body) throw new Error(`llm status ${upstream.status}`);
+        } catch (error) {
+          release();
+          controller.abort();
+          options.onError?.(error);
+          return sendError(reply, 503, MSG_OFFLINE);
+        }
+
+        const filter = filterAnswer();
+        const body = upstream.body;
+        async function* answer(): AsyncGenerator<string> {
+          let total = 0;
+          try {
+            for await (const delta of deltas(body)) {
+              const text = filter(delta);
+              if (!text) continue;
+              total += text.length;
+              yield text;
+              if (total >= MAX_ANSWER_CHARS) return;
+            }
+            const rest = filter.end();
+            if (rest) yield rest;
+          } catch (error) {
+            // Abbruch oder Fehler mitten in der Antwort: einfach beenden
+            if (!controller.signal.aborted) options.onError?.(error);
+          } finally {
+            controller.abort();
+            release();
+          }
+        }
+
+        return reply
+          .header('cache-control', 'no-store')
+          .header('x-content-type-options', 'nosniff')
+          .type('text/plain; charset=utf-8')
+          .send(streamWithRelease(answer(), release));
+      },
+    );
+
+    app.get(
+      '/api/ask/status',
+      { config: { rateLimit: {} } },
+      async (_request, reply): Promise<AskStatus> => {
+        void reply.header('cache-control', 'no-store');
+        if (status && now() - status.at < STATUS_TTL_MS) return status.value;
+        let online: boolean;
+        try {
+          const res = await doFetch(`${base}/health`, {
+            headers,
+            signal: AbortSignal.timeout(2000),
+          });
+          online = res.ok;
+        } catch {
+          online = false;
+        }
+        status = { at: now(), value: { online } };
+        return status.value;
+      },
+    );
   };
 }

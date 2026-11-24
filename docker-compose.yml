@@ -54,6 +54,7 @@ services:
     networks:
       default:
         aliases: [maxim-os-app]
+      llm-test: {}
     read_only: true
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
@@ -82,6 +83,8 @@ services:
     profiles: ['test']
     user: node
     command: ['node', '/stub/server.mjs']
+    # Wie das echte LLM: nur intern erreichbar, kein Internet (#76)
+    networks: [llm-test]
     read_only: true
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
@@ -117,6 +120,11 @@ services:
       - ./e2e/tests:/e2e/tests:ro
       - ./e2e/__snapshots__:/e2e/__snapshots__
       - ./artifacts:/e2e/artifacts
+
+networks:
+  # Nur App und Stub (UI-Tests), ohne Internet
+  llm-test:
+    internal: true
 
 volumes:
   nm-root:

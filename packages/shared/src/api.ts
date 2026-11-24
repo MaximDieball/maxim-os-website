@@ -50,4 +50,6 @@ export const ASK_LIMITS = {
   assistantChars: 2000,
   /** Frage-Antwort-Paare, die der Browser als Verlauf mitschickt. */
   historyPairs: 4,
+  /** Alle Nachrichten zusammen (Kontext des Modells schonen, #76). */
+  totalChars: 4000,
 } as const;

@@ -15,15 +15,10 @@ export interface RenderedPrompt {
   rows: number;
 }
 
-// Breite Zeichen (CJK, Fullwidth, Emoji) belegen zwei Terminalzellen.
-const WIDE =
-  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u;
+// Zellbreite steht in shell/text.ts (auch für den Umbruch genutzt).
+import { cellWidth } from '../shell/text.ts';
 
-export function cellWidth(text: string): number {
-  let width = 0;
-  for (const ch of text) width += WIDE.test(ch) ? 2 : 1;
-  return width;
-}
+export { cellWidth };
 
 const inverse = (s: string): string => `\x1b[7m${s}\x1b[27m`;
 
