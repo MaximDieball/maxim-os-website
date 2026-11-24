@@ -23,7 +23,7 @@ Browser (apps/web)                                     Server (apps/server, Fast
         └──► api.github.com (direkt vom Browser, 30 min gecacht, Fallback content/about/)
 ```
 
-`minecraft` (mvp-6) hat einen eigenen Server-Endpunkt, weil der Browser das Minecraft-Protokoll nicht sprechen kann. Geplant (siehe SPEC): `ask` mit einem LLM-Container (mvp-7).
+`minecraft` (mvp-6) hat einen eigenen Server-Endpunkt, weil der Browser das Minecraft-Protokoll nicht sprechen kann. `ask` (mvp-7) spricht über `POST /api/ask` mit einem LLM-Container im internen Docker-Netz; `/api/health` hängt nie davon ab.
 
 ## 2. Repo-Aufbau
 
@@ -110,13 +110,15 @@ Browser (apps/web)                                     Server (apps/server, Fast
 
 ## 4. Shared (`packages/shared/src`)
 
-| Datei          | Inhalt                                                                                                                                                                                                                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `commands.ts`  | **Command-Registry**: Name, **Gruppe**, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist. Sortiert nach `COMMAND_GROUPS`: Über mich → Projekte und Links → Im Terminal ausprobieren → Dateien → System |
-| `parse.ts`     | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                                                                                                                                                       |
-| `snapshot.ts`  | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                                                                                                                                                   |
-| `minecraft.ts` | Minecraft-Status (#35): Server-List-Ping über `minecraft-server-util` (mit SRV), eigenes Zeitlimit, 10 s Cache, gleichzeitige Anfragen teilen sich einen Ping, Texte ohne Steuer- und §-Farbcodes, nur gültige Spielernamen; Fehler = `{ online: false }`, Details nur ins Log                                      |
-| `api.ts`       | `HealthResponse`, `ErrorResponse`                                                                                                                                                                                                                                                                                   |
+| Datei           | Inhalt                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commands.ts`   | **Command-Registry**: Name, **Gruppe**, Aliase, Beschreibung, Usage, Beispiel, Flags, Argumentzahl, `pathOperands`, `rawArgs`, `redirect`, `writes`. Einzige Quelle für `help` und die Flag-Allowlist. Sortiert nach `COMMAND_GROUPS`: Über mich → Projekte und Links → Im Terminal ausprobieren → Dateien → System                                                                                       |
+| `parse.ts`      | `tokenize`, `parseArgs`, `printable`, Limits, `CONTROL_CHARS`                                                                                                                                                                                                                                                                                                                                             |
+| `snapshot.ts`   | Typen `Snapshot`, `FsNode`, Limits, `isValidName`                                                                                                                                                                                                                                                                                                                                                         |
+| `minecraft.ts`  | Minecraft-Status (#35): Server-List-Ping über `minecraft-server-util` (mit SRV), eigenes Zeitlimit, 10 s Cache, gleichzeitige Anfragen teilen sich einen Ping, Texte ohne Steuer- und §-Farbcodes, nur gültige Spielernamen; Fehler = `{ online: false }`, Details nur ins Log                                                                                                                            |
+| `ask.ts`        | KI-Assistent (#73): strenge Validierung (max. 9 Nachrichten, User 500 / Assistant 2000 Zeichen, letzte `user`, keine fremden Felder), eigener Rate-Limit (10/min pro Client, 60/min global), Warteschlange (1 läuft, 3 warten, sonst 503), 90 s Timeout, Abbruch bis zum Modell, SSE vom llama-server lesen, Antwort ohne Steuerzeichen und `<think>`-Blöcke als `text/plain` streamen, generische Fehler |
+| `ask-prompt.ts` | Fester Systemprompt plus öffentliche Infos aus `content/about/` (about.txt, steckbrief.json)                                                                                                                                                                                                                                                                                                              |
+| `api.ts`        | `HealthResponse`, `ErrorResponse`                                                                                                                                                                                                                                                                                                                                                                         |
 
 Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet, im Build `dist/`.
 
@@ -130,13 +132,15 @@ Im Dev-Betrieb wird über die Export-Condition `source` direkt `src/` verwendet,
 
 **Endpunkte**
 
-| Route                | Antwort                                                                                                                                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/health`    | `{ status: 'ok', version }`, `version` = Commit aus dem Build-Arg `GIT_COMMIT` (sonst `dev`). Hängt von nichts Externem ab                                                                                  |
-| `GET /api/fs`        | Snapshot als JSON, `ETag` = Snapshot-Version, `Cache-Control: no-cache`, 304 bei passendem `If-None-Match`                                                                                                  |
-| `GET /api/minecraft` | `MinecraftStatus` (Typ in `shared/api.ts`): online, Adresse, Version, MOTD, Spieler (Anzahl, Namen), Ping. Keine Parameter, `Cache-Control: no-store`, eigener Cache. Fehlt, wenn `MINECRAFT_HOST` leer ist |
+| Route                 | Antwort                                                                                                                                                                                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`     | `{ status: 'ok', version }`, `version` = Commit aus dem Build-Arg `GIT_COMMIT` (sonst `dev`). Hängt von nichts Externem ab                                                                                                                           |
+| `GET /api/fs`         | Snapshot als JSON, `ETag` = Snapshot-Version, `Cache-Control: no-cache`, 304 bei passendem `If-None-Match`                                                                                                                                           |
+| `GET /api/minecraft`  | `MinecraftStatus` (Typ in `shared/api.ts`): online, Adresse, Version, MOTD, Spieler (Anzahl, Namen), Ping. Keine Parameter, `Cache-Control: no-store`, eigener Cache. Fehlt, wenn `MINECRAFT_HOST` leer ist                                          |
+| `POST /api/ask`       | Body `{ messages }` (Typen und Grenzen `ASK_LIMITS` in `shared/api.ts`); Antwort als gestreamter `text/plain`, Fehler als JSON: 400 ungültig, 429 zu viele Fragen, 503 nicht erreichbar oder beschäftigt. Upstream nur `LLM_URL/v1/chat/completions` |
+| `GET /api/ask/status` | `{ online }` aus `LLM_URL/health`, 15 s gecacht                                                                                                                                                                                                      |
 
-**Umgebungsvariablen:** `PORT` (3000), `HOST`, `CONTENT_DIR` (`/content`), `PUBLIC_DIR` (`/app/public`), `APP_VERSION` (aus `GIT_COMMIT`), `MINECRAFT_HOST` (`minecraft.maxim-dieball.de`, leer = Route aus), `MINECRAFT_PORT` (25565).
+**Umgebungsvariablen:** `PORT` (3000), `HOST`, `CONTENT_DIR` (`/content`), `PUBLIC_DIR` (`/app/public`), `APP_VERSION` (aus `GIT_COMMIT`), `MINECRAFT_HOST` (`minecraft.maxim-dieball.de`, leer = Route aus), `MINECRAFT_PORT` (25565), `LLM_URL` (`http://llm:8080`, leer = `/api/ask` aus), `LLM_API_KEY` (optional).
 
 ## 6. Build, Docker, CI
 

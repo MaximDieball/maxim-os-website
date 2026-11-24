@@ -19,6 +19,8 @@ export interface AppOptions {
   /** Build-Version (Commit-SHA) für /api/health. */
   version?: string;
   rateLimit?: RateLimitOptions;
+  /** KI-Assistent: registriert POST /api/ask und GET /api/ask/status (#73); ohne: Routen fehlen. */
+  ask?: (app: FastifyInstance) => Promise<void>;
   /** Status des Minecraft-Servers für GET /api/minecraft (#35); ohne: Route fehlt. */
   minecraft?: () => Promise<MinecraftStatus>;
 }
@@ -126,6 +128,9 @@ export async function buildApp(options: AppOptions = {}): Promise<FastifyInstanc
       return minecraft();
     });
   }
+
+  // KI-Assistent (#73): eigene, strengere Limits in ask.ts
+  if (options.ask) await options.ask(app);
 
   if (options.publicDir) {
     await app.register(fastifyStatic, {

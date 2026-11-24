@@ -1,5 +1,7 @@
 import { buildApp } from './app.ts';
 import { status as pingJava } from 'minecraft-server-util';
+import { createAsk } from './ask.ts';
+import { buildSystemPrompt } from './ask-prompt.ts';
 import { createMinecraftStatus } from './minecraft.ts';
 import { buildSnapshot } from './snapshot.ts';
 
@@ -27,7 +29,30 @@ const minecraft =
       })
     : undefined;
 
-const app = await buildApp({ publicDir, snapshot, version: process.env.APP_VERSION, minecraft });
+// KI-Assistent (#73): nur über LLM_URL im internen Netz; LLM_URL="" schaltet /api/ask ab.
+const llmUrl = process.env.LLM_URL ?? 'http://llm:8080';
+let logAskError: (error: unknown) => void = () => {};
+const ask = llmUrl
+  ? createAsk({
+      llmUrl,
+      apiKey: process.env.LLM_API_KEY || undefined,
+      systemPrompt: buildSystemPrompt(snapshot),
+      onError: (error) => logAskError(error),
+    })
+  : undefined;
+
+const app = await buildApp({
+  publicDir,
+  snapshot,
+  version: process.env.APP_VERSION,
+  minecraft,
+  ask,
+});
+logAskError = (error) =>
+  app.log.warn(
+    { reason: error instanceof Error ? error.message : 'unknown' },
+    'llm request failed',
+  );
 // Nur die Meldung loggen, keine Details an den Client (Regel 4)
 logError = (error) =>
   app.log.warn(
