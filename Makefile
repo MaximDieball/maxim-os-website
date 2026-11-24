@@ -6,7 +6,7 @@ PW     = $(DC) --profile test run --rm --build playwright
 STUB   = $(DC) --profile test up -d --force-recreate --wait llm-stub
 
 .PHONY: help dev down install lint format typecheck test build test-ui test-ui-screenshots \
-	llm llm-down llm-model llm-bench dev-llm \
+	llm llm-down llm-model llm-bench dev-llm prod prod-down prod-logs prod-check \
         update-baselines ci hooks clean portrait
 
 help: ## Zeigt alle Targets
@@ -48,13 +48,41 @@ update-baselines: ## Erzeugt Regressions-Baselines neu (nur im Container)
 	$(STUB)
 	$(PW) test tests/regression --update-snapshots
 
-ci: lint typecheck test build test-ui ## Komplette Pipeline-Checkliste lokal
+ci: lint typecheck test build prod-check test-ui ## Komplette Pipeline-Checkliste lokal
 
 portrait: ## Erzeugt das ASCII-Porträt aus assets/headshot/image.png nach content/about/
 	$(TOOLS) pnpm --filter @maxim-os/scripts portrait
 
 hooks: ## Aktiviert die Git-Hooks (commit-msg, pre-push)
 	git config core.hooksPath .githooks
+
+# Production (#38): nur die Website, Konfiguration aus .env
+PROD_DC = docker compose -f docker-compose.prod.yml
+
+prod: ## Production bauen und starten (Commit in /api/health), Port aus .env
+	GIT_COMMIT=$$(git rev-parse --short HEAD) $(PROD_DC) up -d --build --wait
+
+prod-down: ## Production stoppen
+	$(PROD_DC) down
+
+prod-logs: ## Logs der Production-Website
+	$(PROD_DC) logs -f --tail 100
+
+# Startet das schon gebaute Image (make build) wie in Production und prüft Health und Härtung.
+PROD_CHECK = APP_IMAGE=maxim-os-app:local APP_PORT=18080 $(PROD_DC) -p maxim-os-prodcheck
+
+prod-check: ## Prüft das Production-Setup: Health, Nicht-Root, read-only, keine Paketmanager (#37)
+	@docker network inspect maxim-os_llm-net >/dev/null 2>&1 || docker network create --internal maxim-os_llm-net >/dev/null
+	$(PROD_CHECK) up -d --no-build --wait
+	@c=$$(docker ps -q --filter name=maxim-os-prodcheck-website); ok=1; \
+	  [ "$$(docker inspect $$c --format '{{.Config.User}}|{{.HostConfig.ReadonlyRootfs}}|{{.HostConfig.CapDrop}}')" = "node|true|[ALL]" ] \
+	    || { echo "FEHLER: Härtung fehlt"; ok=0; }; \
+	  docker exec $$c node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>r.json()).then(j=>process.exit(j.status==='ok'?0:1))" \
+	    || { echo "FEHLER: Health nicht ok"; ok=0; }; \
+	  if docker exec $$c sh -c 'command -v npm || command -v npx || command -v corepack'; then echo "FEHLER: Paketmanager im Image"; ok=0; fi; \
+	  if docker exec $$c sh -c 'touch /app/x || touch /content/x' 2>/dev/null; then echo "FEHLER: Dateisystem beschreibbar"; ok=0; fi; \
+	  $(PROD_CHECK) down >/dev/null 2>&1; \
+	  [ $$ok = 1 ] && echo "prod-check ok: Health, Nicht-Root, read-only, keine Capabilities, keine Paketmanager"
 
 # KI-Assistent (#72): Compose mit docker-compose.llm.yml. Variante cpu (Standard) oder gpu.
 LLM_DC      = $(DC) -f docker-compose.yml -f docker-compose.llm.yml
